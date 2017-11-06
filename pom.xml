@@ -1,0 +1,121 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.unsw.security.iot</groupId>
+  <artifactId>openflow-simulator</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>1.7</source>
+                    <target>1.7</target>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+    <packaging>jar</packaging>
+
+  <name>openflow-simulator</name>
+  <url>http://maven.apache.org</url>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>3.8.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.java.dev.jna</groupId>
+      <artifactId>jna</artifactId>
+      <version>4.2.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>1.7.12</version>
+    </dependency>
+    <!--<dependency>-->
+      <!--<groupId>io.pkts</groupId>-->
+      <!--<artifactId>pkts-buffers</artifactId>-->
+      <!--<version>3.0.1</version>-->
+    <!--</dependency>-->
+
+    <!--<dependency>-->
+      <!--<groupId>io.pkts</groupId>-->
+      <!--<artifactId>pkts-sdp</artifactId>-->
+      <!--<version>3.0.1</version>-->
+    <!--</dependency>-->
+
+    <!--<dependency>-->
+      <!--<groupId>io.pkts</groupId>-->
+      <!--<artifactId>pkts-sip</artifactId>-->
+      <!--<version>3.0.1</version>-->
+    <!--</dependency>-->
+
+    <!--<dependency>-->
+      <!--<groupId>io.pkts</groupId>-->
+      <!--<artifactId>pkts-core</artifactId>-->
+      <!--<version>3.0.1</version>-->
+    <!--</dependency>-->
+
+    <!--<dependency>-->
+      <!--<groupId>io.pkts</groupId>-->
+      <!--<artifactId>pkts-streams</artifactId>-->
+      <!--<version>3.0.1</version>-->
+    <!--</dependency>-->
+    <!-- https://mvnrepository.com/artifact/org.pcap4j/pcap4j -->
+    <dependency>
+      <groupId>sample</groupId>
+      <artifactId>com.sample</artifactId>
+      <version>1.0</version>
+      <scope>system</scope>
+      <systemPath>${project.basedir}/libs/pcap4j-packetfactory-static-1.7.2.jar</systemPath>
+    </dependency>
+    <dependency>
+      <groupId>samplex</groupId>
+      <artifactId>com.sample</artifactId>
+      <version>1.0</version>
+      <scope>system</scope>
+      <systemPath>${project.basedir}/libs/pcap4j-core-1.7.2.jar</systemPath>
+    </dependency>
+    <dependency>
+      <groupId>samplexx</groupId>
+      <artifactId>com.sample</artifactId>
+      <version>1.0</version>
+      <scope>system</scope>
+      <systemPath>${project.basedir}/libs/pcap4j-packetfactory-propertiesbased-1.7.2.jar</systemPath>
+    </dependency>
+    <dependency>
+      <groupId>com.googlecode.json-simple</groupId>
+      <artifactId>json-simple</artifactId>
+      <version>1.1.1</version>
+    </dependency>
+  </dependencies>
+
+  <repositories>
+    <!-- Before adding ANYTHING in here, please start a discussion on the dev list.
+         Ideally the Axis2 build should only use Maven central (which is available
+         by default) and nothing else. We had troubles with other repositories in
+         the past. Therefore configuring additional repositories here should be
+         considered very carefully. -->
+    <repository>
+      <id>clojars-nexus</id>
+      <name>clojars</name>
+      <url>http://clojars.org/repo/</url>
+      <releases>
+        <enabled>true</enabled>
+        <updatePolicy>daily</updatePolicy>
+        <checksumPolicy>ignore</checksumPolicy>
+      </releases>
+    </repository>
+  </repositories>
+</project>

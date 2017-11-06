@@ -1,0 +1,28 @@
+{
+    "modules": [
+        "com.ayyoob.sdn.of.simulator.apps.IoTDeviceFlowBuilder",
+        "com.ayyoob.sdn.of.simulator.apps.SingleSwitchStatsCollector"
+    ],
+
+    "switchConfig": {
+        "dpId" : "14:CC:20:51:33:EA",
+        "macAddress": "14:CC:20:51:33:EA",
+        "ipAddress": "192.168.1.1"
+    },
+
+    "moduleConfig": {
+        "IoTDeviceFlowBuilder": {
+            "isIoTDeviceFlowBuilderEnable": false,
+            "devices":["EC:1A:59:79:50:1D","EC:1A:59:79:F4:89","00:16:6C:AB:6B:88","B4:75:0E:EC:E5:A9","EC:1A:59:7A:02:C5"]
+        },
+
+        "SingleSwitchStatsCollector": {
+            "enabled": true,
+            "summerizationTimeInSeconds": 60,
+            "dpId":"14:CC:20:51:33:EA"
+        }
+
+    },
+
+    "pcapLocation": "/Users/ayyoobhamza/Desktop/unsw/pcap/pcap/benign/wemomotion.pcap"
+}
