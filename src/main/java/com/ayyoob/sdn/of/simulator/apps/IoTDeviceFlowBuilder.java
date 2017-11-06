@@ -31,6 +31,9 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
 
     public void init(JSONObject jsonObject) {
         enabled = (Boolean) jsonObject.get("isIoTDeviceFlowBuilderEnable");
+        if (!enabled) {
+            return;
+        }
         JSONArray devs = (JSONArray) jsonObject.get("devices");
         Iterator<String> iterator = devs.iterator();
         while (iterator.hasNext()) {

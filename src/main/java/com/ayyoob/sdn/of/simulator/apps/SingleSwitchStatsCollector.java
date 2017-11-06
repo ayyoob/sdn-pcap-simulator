@@ -25,6 +25,9 @@ public class SingleSwitchStatsCollector implements ControllerApp {
     @Override
     public void init(JSONObject jsonObject) {
         enabled = (Boolean) jsonObject.get("enabled");
+        if (!enabled) {
+            return;
+        }
         summerizationTimeInMillis = ((Long) jsonObject.get("summerizationTimeInSeconds")) * 1000;
         dpId = (String) jsonObject.get("dpId");
         String currentPath = Paths.get(".").toAbsolutePath().normalize().toString();
