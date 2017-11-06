@@ -426,7 +426,7 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                         reverseFlow.setDstMac(ofFlow.getSrcMac());
                         reverseFlow.setSrcPort(ofFlow.getDstPort());
                         reverseFlow.setDstPort(ofFlow.getSrcPort());
-                        flowsTobeAdded.add(ofFlow);
+                        flowsTobeAdded.add(reverseFlow);
                     }
                 }
 
