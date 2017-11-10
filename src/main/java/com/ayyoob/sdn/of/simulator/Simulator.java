@@ -117,26 +117,35 @@ public class Simulator {
                             if (udpPacket.getHeader().getDstPort().valueAsString().equals(Constants.DNS_PORT)) {
                                 try {
                                     DnsPacket dnsPacket = udpPacket.get(DnsPacket.class);
-                                    simPacket.setDnsQname(dnsPacket.getHeader().getQuestions().get(0).getQName().getName());
+                                    List<DnsQuestion> dnsQuestions = dnsPacket.getHeader().getQuestions();
+                                    if (dnsQuestions.size() > 0) {
+                                        simPacket.setDnsQname(dnsQuestions.get(0).getQName().getName());
+                                    }
                                 } catch (NullPointerException e) {
                                     //ignore packet that send to port 53
                                 }
                                 //System.out.println(new String(packet.getData()));
                             } else if (udpPacket.getHeader().getSrcPort().valueAsString().equals(Constants.DNS_PORT)) {
                                 DnsPacket dnsPacket = udpPacket.get(DnsPacket.class);
-                                List<DnsResourceRecord> dnsResourceRecords = dnsPacket.getHeader().getAnswers();
-                                List<String> answers = new ArrayList<String>();
+                                try {
 
-                                for (DnsResourceRecord record : dnsResourceRecords) {
-                                    try {
-                                        DnsRDataA dnsRDataA = (DnsRDataA) record.getRData();
-                                        answers.add(dnsRDataA.getAddress().getHostAddress());
-                                    } catch (ClassCastException ex) {
-                                        //ignore
+                                    List<DnsResourceRecord> dnsResourceRecords = dnsPacket.getHeader().getAnswers();
+                                    List<String> answers = new ArrayList<String>();
+
+                                    for (DnsResourceRecord record : dnsResourceRecords) {
+                                        try {
+                                            DnsRDataA dnsRDataA = (DnsRDataA) record.getRData();
+                                            answers.add(dnsRDataA.getAddress().getHostAddress());
+                                        } catch (ClassCastException ex) {
+                                            //ignore
+                                        }
+
                                     }
-
+                                    simPacket.setDnsAnswers(answers);
+                                }catch (NullPointerException e) {
+                                    //System.out.println(packet);
+                                    //ignore
                                 }
-                                simPacket.setDnsAnswers(answers);
                             }
                         } else {
                             simPacket.setSrcPort("*");

@@ -20,13 +20,14 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
 
     private static final long MAX_FLOWS_PER_DEVICE = 5;
     private static final int THRESHOLD_FOR_DYNAMIC_IP_FLOWS = 3;
-    private static final int MIN_FLOW_IMPACT_THRESHOLD = 5; //percentage
+    private static final int MIN_FLOW_IMPACT_THRESHOLD = 10; //percentage
     private static final long MIN_TIME_FOR_FLOWS_MILLI_SECONDS = 120000;
 
     private static Map<String, Set<String>> deviceDnsIPsMap = new HashMap<String, Set<String>>();
     private static Map<OFFlow, Long> deviceFlowTimeMap = new HashMap<OFFlow, Long>();
     private static Map<String, long[]> deviceFlowPacketCountBeenRemoved = new HashMap<String, long[]>();
     private static boolean enabled = true;
+    private static String filename = "stats";
     private static List<String> devices =new ArrayList<String>();
 
     public void init(JSONObject jsonObject) {
@@ -73,8 +74,10 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
             if (dnsIPs == null) {
                 dnsIPs = new HashSet<String>();
             }
-            dnsIPs.addAll(packet.getDnsAnswers());
-            deviceDnsIPsMap.put(destMac, dnsIPs);
+            if (packet.getDnsAnswers() != null) {
+                dnsIPs.addAll(packet.getDnsAnswers());
+                deviceDnsIPsMap.put(destMac, dnsIPs);
+            }
         } else {
 
             String dstIp = packet.getDstIp();
@@ -385,6 +388,15 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
         ofFlow.setDstMac(deviceMac);
         ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
         ofFlow.setPriority(L2D_PRIORITY);
+        ofFlow.setIpProto(Constants.TCP_PROTO);
+        ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
+        OFController.getInstance().addFlow(dpId, ofFlow);
+
+        ofFlow = new OFFlow();
+        ofFlow.setDstMac(deviceMac);
+        ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+        ofFlow.setPriority(L2D_PRIORITY);
+        ofFlow.setIpProto(Constants.UDP_PROTO);
         ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
         OFController.getInstance().addFlow(dpId, ofFlow);
 
@@ -480,7 +492,7 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                 PrintWriter writer = null;
                 try {
                     writer = new PrintWriter(currentPath + File.separator
-                            + "result" + File.separator + deviceMac + ".csv", "UTF-8");
+                            + "result" + File.separator + deviceMac + "_flows.csv", "UTF-8");
                     ofFlows = getActiveFlows(dpId, deviceMac);
                     if (ofFlows.size() > 0) {
                         System.out.println("Device : " + deviceMac);

@@ -25,6 +25,7 @@ public class SingleSwitchStatsCollector implements ControllerApp {
     @Override
     public void init(JSONObject jsonObject) {
         enabled = (Boolean) jsonObject.get("enabled");
+        String outputFilename = (String) jsonObject.get("filename");
         if (!enabled) {
             return;
         }
@@ -36,7 +37,7 @@ public class SingleSwitchStatsCollector implements ControllerApp {
         if (!workingDirectory.exists()) {
             workingDirectory.mkdir();
         }
-        filename = currentPath + File.separator + "result" + File.separator + "stats.csv";
+        filename = currentPath + File.separator + "result" + File.separator + outputFilename + ".csv";
 
         ClassLoader classLoader = Simulator.class.getClassLoader();
         File file = new File(classLoader.getResource("proactiveFlows.txt").getFile());
@@ -70,7 +71,7 @@ public class SingleSwitchStatsCollector implements ControllerApp {
             if (columns.size() > 0) {
                 try {
                     PrintWriter columnWriter = new PrintWriter(currentPath + File.separator
-                            + "result" + File.separator + "statsMeta.csv", "UTF-8");
+                            + "result" + File.separator + outputFilename + "_flow_meta.csv", "UTF-8");
                     boolean first = true;
                     for (int i = 1; i <= columns.size(); i++) {
                         lineHeader = lineHeader + "," + i;
