@@ -109,6 +109,7 @@ public class Simulator {
                             TcpPacket tcpPacket = (TcpPacket) ipV4Packet.getPayload();
                             simPacket.setSrcPort(tcpPacket.getHeader().getSrcPort().valueAsString());
                             simPacket.setDstPort(tcpPacket.getHeader().getDstPort().valueAsString());
+                            simPacket.setTcpFlag(tcpPacket.getHeader().getSyn(),tcpPacket.getHeader().getAck());
 
                         } else if (ipV4Header.getProtocol().valueAsString().equals(IpNumber.UDP.valueAsString()) ) {
                             UdpPacket udpPacket = (UdpPacket) ipV4Packet.getPayload();
@@ -151,12 +152,13 @@ public class Simulator {
                             simPacket.setSrcPort("*");
                             simPacket.setDstPort("*");
                         }
-                        long startTime = System.currentTimeMillis();
-                        ofSwitch.transmit(simPacket);
-                        long endTime = System.currentTimeMillis();
-                        sumPacketProcessingTime = sumPacketProcessingTime + (endTime-startTime);
+
 
                     }
+                    long startTime = System.currentTimeMillis();
+                    ofSwitch.transmit(simPacket);
+                    long endTime = System.currentTimeMillis();
+                    sumPacketProcessingTime = sumPacketProcessingTime + (endTime-startTime);
                 } catch (ClassCastException e) {
                     //ignore
                 }

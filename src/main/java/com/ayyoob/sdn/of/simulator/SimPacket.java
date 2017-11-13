@@ -16,6 +16,13 @@ public class SimPacket {
     private byte[] header;
     private byte[] data;
     private String dnsQname;
+    private Flag tcpFlag;
+
+    public enum Flag {
+        SYN,
+        SYN_ACK,
+        OTHER
+    }
 
     public String isDnsQname() {
         return dnsQname;
@@ -130,6 +137,20 @@ public class SimPacket {
 
     public void setData(byte[] data) {
         this.data = data;
+    }
+
+    public Flag getTcpFlag() {
+        return tcpFlag;
+    }
+
+    public void setTcpFlag(boolean syn, boolean ack) {
+        tcpFlag = Flag.OTHER;
+        if (syn) {
+            tcpFlag = Flag.SYN;
+            if (ack) {
+                tcpFlag = Flag.SYN_ACK;
+            }
+        }
     }
 
     public void print() {

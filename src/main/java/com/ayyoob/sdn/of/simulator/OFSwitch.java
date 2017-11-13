@@ -129,11 +129,11 @@ public class OFSwitch {
             String dstMac=packet.getDstMac();
             String ethType=packet.getEthType();
             String vlanId="*";
-            String srcIp=packet.getSrcIp();
-            String dstIp=packet.getDstIp();
-            String ipProto="" + packet.getIpProto();
-            String srcPort="" + packet.getSrcPort();
-            String dstPort="" + packet.getDstPort();
+            String srcIp=packet.getSrcIp() == null ? "*": packet.getSrcIp();
+            String dstIp=packet.getDstIp() == null ? "*": packet.getDstIp();
+            String ipProto=packet.getIpProto()== null ? "*": packet.getIpProto();
+            String srcPort=packet.getSrcPort()== null ? "*": packet.getSrcPort();
+            String dstPort=packet.getDstPort()== null ? "*": packet.getDstPort();
 
             boolean condition = (srcMac.equals(flow.getSrcMac()) || flow.getSrcMac().equals("*"))&&
                     (dstMac.equals(flow.getDstMac())  || flow.getDstMac().equals("*"))&&
