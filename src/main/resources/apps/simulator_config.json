@@ -12,18 +12,18 @@
 
     "moduleConfig": {
         "IoTDeviceFlowBuilder": {
-            "isIoTDeviceFlowBuilderEnable": true,
-            "devices":["ec:1a:59:83:28:11"]
+            "isIoTDeviceFlowBuilderEnable": false,
+            "devices":["B4:75:0E:EC:E5:A9"]
         },
 
         "SingleSwitchStatsCollector": {
-            "enabled": false,
+            "enabled": true,
             "summerizationTimeInSeconds": 60,
             "dpId":"14:CC:20:51:33:EA",
-            "filename":"ec1a59832811"
+            "filename":"ec1a5979501d"
         }
 
     },
 
-    "pcapLocation": "/Users/ayyoobhamza/Desktop/unsw/anomalydetection/dataset/pcap/training/ec1a59832811.pcap"
+    "pcapLocation": "/Users/ayyoobhamza/Desktop/unsw/anomalydetection/dataset/pcap/testing/ec1a5979501d.pcap"
 }

@@ -25,7 +25,7 @@ public class SingleSwitchStatsCollector implements ControllerApp {
     @Override
     public void init(JSONObject jsonObject) {
         enabled = (Boolean) jsonObject.get("enabled");
-        String outputFilename = (String) jsonObject.get("filename");
+        String outputFilename = ((String) jsonObject.get("filename")).toLowerCase();
         if (!enabled) {
             return;
         }
@@ -74,7 +74,6 @@ public class SingleSwitchStatsCollector implements ControllerApp {
                             + "result" + File.separator + outputFilename + "_flow_meta.csv", "UTF-8");
                     boolean first = true;
                     for (int i = 1; i <= columns.size(); i++) {
-                        lineHeader = lineHeader + "," + i;
                         if (first) {
                             columnWriter.println("flowId," + columns.get(i-1).getFlowHeaderWithoutFlowStat());
                             first = false;
@@ -106,35 +105,36 @@ public class SingleSwitchStatsCollector implements ControllerApp {
             return;
         }
 
-        long currentLogTime = 0;
+        long nextLogTime = 0;
         if (lastLogTime == 0) {
             lastLogTime = packet.getTimestamp();
             return;
         }
-        currentLogTime = lastLogTime + summerizationTimeInMillis;
+        nextLogTime = lastLogTime + summerizationTimeInMillis;
 
         long currentTime = packet.getTimestamp();
-        String volumeData =  "";
-        if (currentTime >= currentLogTime) {
-            volumeData =  getVolumeData();
-            while (currentTime >= currentLogTime) {
-                //writer.println(currentLogTime + "," + volumeData);
-                data.add(currentLogTime + "," + getVolumeData());
-                long iter = (currentTime - (currentLogTime+ summerizationTimeInMillis)) / summerizationTimeInMillis;
-                if (iter > 0) {
-                    for (int i = 0; i <iter; i++) {
-                        currentLogTime = currentLogTime + summerizationTimeInMillis;
-                        //writer.println(currentLogTime + "," + volumeData);
-                        data.add(currentLogTime + "," + getVolumeData());
-                    }
-                }
-                lastLogTime = currentLogTime;
-                currentLogTime = currentLogTime + summerizationTimeInMillis;
-            }
+        if (currentTime >= nextLogTime) {
+            lastLogTime = currentTime;
+            data.add(currentTime + "," + getVolumeData());
+//            while (currentTime >= nextLogTime) {
+//                //writer.println(currentLogTime + "," + volumeData);
+//                data.add(nextLogTime + "," + getVolumeData());
+//
+//                long iter = (currentTime - (nextLogTime+ summerizationTimeInMillis)) / summerizationTimeInMillis;
+//                if (iter > 0) {
+//                    for (int i = 0; i <iter; i++) {
+//                        nextLogTime = nextLogTime + summerizationTimeInMillis;
+//                        //writer.println(currentLogTime + "," + volumeData);
+//                        data.add(nextLogTime + "," + getVolumeData());
+//                    }
+//                }
+//                lastLogTime = nextLogTime;
+//                nextLogTime = nextLogTime + summerizationTimeInMillis;
+//            }
 
         }
 
-        if (data.size() > 100000) {
+        if (data.size() > 10000) {
             try {
                 writeRaw(data);
                 data.clear();
@@ -146,32 +146,36 @@ public class SingleSwitchStatsCollector implements ControllerApp {
 
     private String getVolumeData() {
         boolean first = true;
-        String volumeData = "";
+        StringBuilder volumeData = new StringBuilder();
+        volumeData.append("");
         for (OFFlow ofFlow : columns) {
             OFFlow detectedFlow = null;
             List<OFFlow> flowStats = OFController.getInstance().getAllFlows(dpId);
             for (OFFlow flowStat : flowStats) {
                 if (ofFlow.equals(flowStat)) {
                     detectedFlow = flowStat;
+                    break;
                 }
             }
             if (first) {
                 if (detectedFlow != null) {
-                    volumeData =  "" +detectedFlow.getVolumeTransmitted();
+                    volumeData.append(detectedFlow.getVolumeTransmitted());
                 } else {
-                    volumeData = "0";
+                    volumeData.append(0);
                 }
                 first =false;
             } else {
                 if (detectedFlow != null) {
-                    volumeData = volumeData + "," +detectedFlow.getVolumeTransmitted();
+                    volumeData.append(",");
+                    volumeData.append(detectedFlow.getVolumeTransmitted());
                 } else {
-                    volumeData = volumeData +",";
+                    volumeData.append(",");
+                    volumeData.append(0);
                 }
             }
 
         }
-        return volumeData;
+        return volumeData.toString();
     }
 
     @Override

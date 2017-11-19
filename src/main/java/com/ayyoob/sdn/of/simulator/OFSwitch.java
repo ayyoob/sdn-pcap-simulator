@@ -9,10 +9,14 @@ public class OFSwitch {
     private String ip;
     private String dpid;
     private long currentTime=0;
+    private long lastPacketTime=0;
     private LinkedList<OFFlow> ofFlows = new LinkedList<OFFlow>();
 
     public void transmit(SimPacket packet) {
         currentTime = packet.getTimestamp();
+        if (lastPacketTime > currentTime) {
+            return;
+        }
         OFFlow flow = getMatchingFlow(packet);
 
         if (flow.getOfAction() == OFFlow.OFAction.MIRROR_TO_CONTROLLER) {
@@ -20,6 +24,7 @@ public class OFSwitch {
         }
         flow.setVolumeTransmitted(flow.getVolumeTransmitted() + packet.getSize());
         flow.setPacketCount(flow.getPacketCount() + 1);
+        lastPacketTime = packet.getTimestamp();
     }
 
     public OFSwitch(String dpid, String macAddress, String ip) {
