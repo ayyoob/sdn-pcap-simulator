@@ -10,14 +10,16 @@
         "ipAddress": "192.168.1.1"
     },
 
+    "logPacket":true,
+
     "moduleConfig": {
         "IoTDeviceFlowBuilder": {
-            "isIoTDeviceFlowBuilderEnable": false,
+            "isIoTDeviceFlowBuilderEnable": true,
             "devices":["B4:75:0E:EC:E5:A9"]
         },
 
         "SingleSwitchStatsCollector": {
-            "enabled": true,
+            "enabled": false,
             "summerizationTimeInSeconds": 60,
             "dpId":"14:CC:20:51:33:EA",
             "filename":"ec1a5979501d"
@@ -25,5 +27,5 @@
 
     },
 
-    "pcapLocation": "/Users/ayyoobhamza/Desktop/unsw/anomalydetection/dataset/pcap/testing/ec1a5979501d.pcap"
+    "pcapLocation": "/Users/ayyoobhamza/Desktop/unsw/anomalydetection/dataset/pcap/training/B4750EECE5A9.pcap"
 }

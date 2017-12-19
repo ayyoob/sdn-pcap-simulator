@@ -1,6 +1,8 @@
 package com.ayyoob.sdn.of.simulator;
 
-public class OFFlow {
+import java.io.Serializable;
+
+public class OFFlow implements Serializable{
     private String srcMac="*";
     private String dstMac="*";
     private String ethType="*";

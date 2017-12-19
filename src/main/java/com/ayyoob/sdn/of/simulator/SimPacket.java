@@ -158,4 +158,9 @@ public class SimPacket {
         System.out.println(size + "," + srcMac + "," + dstMac + "," + ethType + "," + srcIp + "," + dstIp
                 + "," + ipProto + "," + srcPort + "," + dstPort + "," + timestamp);
     }
+
+    public String getPacketInfo() {
+        return size + "," + srcMac + "," + dstMac + "," + ethType + "," + srcIp + "," + dstIp
+                + "," + ipProto + "," + srcPort + "," + dstPort + "," + timestamp;
+    }
 }

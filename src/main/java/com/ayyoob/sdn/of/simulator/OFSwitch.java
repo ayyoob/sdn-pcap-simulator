@@ -18,8 +18,8 @@ public class OFSwitch {
             return;
         }
         OFFlow flow = getMatchingFlow(packet);
-
         if (flow.getOfAction() == OFFlow.OFAction.MIRROR_TO_CONTROLLER) {
+            flow = getMatchingFlow(packet);
             OFController.getInstance().receive(dpid, packet);
         }
         flow.setVolumeTransmitted(flow.getVolumeTransmitted() + packet.getSize());

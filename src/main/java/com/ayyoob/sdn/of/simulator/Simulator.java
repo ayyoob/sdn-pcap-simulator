@@ -115,6 +115,7 @@ public class Simulator {
                             UdpPacket udpPacket = (UdpPacket) ipV4Packet.getPayload();
                             simPacket.setSrcPort(udpPacket.getHeader().getSrcPort().valueAsString());
                             simPacket.setDstPort(udpPacket.getHeader().getDstPort().valueAsString());
+
                             if (udpPacket.getHeader().getDstPort().valueAsString().equals(Constants.DNS_PORT)) {
                                 try {
                                     DnsPacket dnsPacket = udpPacket.get(DnsPacket.class);
@@ -160,7 +161,7 @@ public class Simulator {
                     long endTime = System.currentTimeMillis();
                     sumPacketProcessingTime = sumPacketProcessingTime + (endTime-startTime);
                 } catch (ClassCastException e) {
-                    //ignore
+                    //ignorewi
                 }
 //                simPacket.print();
             }
