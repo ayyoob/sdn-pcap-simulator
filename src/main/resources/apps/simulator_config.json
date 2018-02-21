@@ -1,7 +1,11 @@
 {
     "modules": [
         "com.ayyoob.sdn.of.simulator.apps.IoTDeviceFlowBuilder",
-        "com.ayyoob.sdn.of.simulator.apps.SingleSwitchStatsCollector"
+        "com.ayyoob.sdn.of.simulator.apps.IoTDeviceFlowBuilderWithRate",
+        "com.ayyoob.sdn.of.simulator.apps.SingleSwitchStatsCollector",
+        "com.ayyoob.sdn.of.simulator.apps.IoTDNSWorkerSetApp",
+        "com.ayyoob.sdn.of.simulator.apps.IoTDeviceFlowBuilderWithRateWithIPs",
+        "com.ayyoob.sdn.of.simulator.apps.MUDBasedIoTDeviceFlowBuilder"
     ],
 
     "switchConfig": {
@@ -10,22 +14,43 @@
         "ipAddress": "192.168.1.1"
     },
 
-    "logPacket":true,
+    "logPacket":false,
 
     "moduleConfig": {
         "IoTDeviceFlowBuilder": {
-            "isIoTDeviceFlowBuilderEnable": true,
-            "devices":["B4:75:0E:EC:E5:A9"]
+            "isIoTDeviceFlowBuilderEnable": false,
+            "devices":["EC:1A:59:79:F4:89"]
+        },
+
+        "IoTDeviceFlowBuilderWithRate":{
+            "isIoTDeviceFlowBuilderEnable": false,
+            "devices":["00:17:88:2b:9a:25"]
+        },
+
+        "IoTDeviceFlowBuilderWithRateWithIPs":{
+            "isIoTDeviceFlowBuilderEnable": false,
+            "devices":["e0:76:d0:3f:00:ae"]
+        },
+
+        "MUDBasedIoTDeviceFlowBuilder":{
+            "enable": true,
+            "devices":["ec:1a:59:83:28:11"]
+        },
+
+        "IoTDNSWorkerSetApp": {
+            "enabled": false,
+            "device":"70:ee:50:18:34:43",
+            "gateway":"14:CC:20:51:33:EA"
         },
 
         "SingleSwitchStatsCollector": {
             "enabled": false,
             "summerizationTimeInSeconds": 60,
             "dpId":"14:CC:20:51:33:EA",
-            "filename":"ec1a5979501d"
+            "filename":"00166CAB6B88"
         }
 
     },
 
-    "pcapLocation": "/Users/ayyoobhamza/Desktop/unsw/anomalydetection/dataset/pcap/training/B4750EECE5A9.pcap"
+    "pcapLocation": "/Users/ayyoobhamza/Desktop/dinesh/mud/pcap/ec1a59832811.pcap"
 }

@@ -81,7 +81,12 @@ public class Simulator {
             int i =0;
             while (true) {
                 i++;
-                Packet packet = handle.getNextPacketEx();
+                Packet packet;
+                try {
+                    packet = handle.getNextPacketEx();
+                } catch (IllegalArgumentException e) {
+                    continue;
+                }
 
                 totalPacketCount++;
                 //System.out.println(packet);
@@ -95,6 +100,9 @@ public class Simulator {
                 simPacket.setTimestamp(handle.getTimestamp().getTime());
                 try {
                     EthernetPacket.EthernetHeader header = (EthernetPacket.EthernetHeader) packet.getHeader();
+                    if (header == null) {
+                        continue;
+                    }
                     simPacket.setSrcMac(header.getSrcAddr().toString());
                     simPacket.setDstMac(header.getDstAddr().toString());
                     simPacket.setSize(packet.length());
@@ -133,7 +141,7 @@ public class Simulator {
 
                                     List<DnsResourceRecord> dnsResourceRecords = dnsPacket.getHeader().getAnswers();
                                     List<String> answers = new ArrayList<String>();
-
+                                    simPacket.setDnsQname(dnsPacket.getHeader().getQuestions().get(0).getQName().getName());
                                     for (DnsResourceRecord record : dnsResourceRecords) {
                                         try {
                                             DnsRDataA dnsRDataA = (DnsRDataA) record.getRData();
@@ -144,7 +152,7 @@ public class Simulator {
 
                                     }
                                     simPacket.setDnsAnswers(answers);
-                                }catch (NullPointerException e) {
+                                }catch (NullPointerException | IndexOutOfBoundsException e) {
                                     //System.out.println(packet);
                                     //ignore
                                 }
@@ -165,12 +173,14 @@ public class Simulator {
                 }
 //                simPacket.print();
             }
+
         } catch (EOFException e) {
         } catch (NotOpenException e) {
             e.printStackTrace();
         } catch (TimeoutException e) {
             e.printStackTrace();
         }
+        ofSwitch.printDevice();
         System.out.println("Average Packet Processing Time " + (sumPacketProcessingTime *1.0)/totalPacketCount);
         System.out.println("Timetaken: " + (endTimestamp-startTimestamp) + ", Total Packets: " + totalPacketCount);
     }

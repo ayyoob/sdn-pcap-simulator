@@ -12,6 +12,8 @@ public class OFFlow implements Serializable{
     private String ipProto="*";
     private String srcPort="*";
     private String dstPort="*";
+    //duration needs to be manually calculated from controller
+    private long createdTimestamp;
     private OFAction ofAction;
     private int priority;
     private long volumeTransmitted = 0;
@@ -140,6 +142,14 @@ public class OFFlow implements Serializable{
                 + "@" + this.srcIp + "@" + this.dstIp + "@" + this.ipProto + "@" + this.srcPort + "@" + this.dstPort).hashCode();
 
         return result;
+    }
+
+    public long getCreatedTimestamp() {
+        return createdTimestamp;
+    }
+
+    public void setCreatedTimestamp(long createdTimestamp) {
+        this.createdTimestamp = createdTimestamp;
     }
 
     @Override

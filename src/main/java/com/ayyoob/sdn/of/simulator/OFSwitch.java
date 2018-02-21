@@ -11,16 +11,42 @@ public class OFSwitch {
     private long currentTime=0;
     private long lastPacketTime=0;
     private LinkedList<OFFlow> ofFlows = new LinkedList<OFFlow>();
+    private static String ignoreMacPrefix[] = {"01:00:5E", "33:33", "FF:FF:FF"};
+    private String devices[] = {"B4:75:0E:EC:E5:A9","EC:1A:59:79:50:1D","EC:1A:59:79:F4:89","00:16:6C:AB:6B:88", "EC:1A:59:7A:02:C5"};
+    private int total[] = {0,0,0,0,0};
+    private int sent[] = {0,0,0,0,0};
 
     public void transmit(SimPacket packet) {
         currentTime = packet.getTimestamp();
         if (lastPacketTime > currentTime) {
             return;
         }
+
+        for (int i=0; i< 5;i ++) {
+            if (packet.getSrcMac().toUpperCase().equals(devices[i])) {
+                total[i]=total[i]+1;
+            }
+            if (packet.getDstMac().toUpperCase().equals(devices[i])) {
+                total[i]=total[i]+1;
+            }
+        }
+
+        if (isIgnored(packet.getSrcMac()) || isIgnored(packet.getDstMac())) {
+            return;
+        }
+
         OFFlow flow = getMatchingFlow(packet);
         if (flow.getOfAction() == OFFlow.OFAction.MIRROR_TO_CONTROLLER) {
             flow = getMatchingFlow(packet);
             OFController.getInstance().receive(dpid, packet);
+            for (int i=0; i< 5;i ++) {
+                if (packet.getSrcMac().toUpperCase().equals(devices[i])) {
+                    sent[i]=sent[i]+1;
+                }
+                if (packet.getDstMac().toUpperCase().equals(devices[i])) {
+                    sent[i]=sent[i]+1;
+                }
+            }
         }
         flow.setVolumeTransmitted(flow.getVolumeTransmitted() + packet.getSize());
         flow.setPacketCount(flow.getPacketCount() + 1);
@@ -164,5 +190,22 @@ public class OFSwitch {
             System.out.println(ofFlows.get(i).getFlowString());
         }
     }
+
+    private boolean isIgnored(String mac) {
+        for (String prefix : ignoreMacPrefix) {
+            if (mac.contains(prefix.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void  printDevice() {
+        for (int i =0 ; i < 5; i++) {
+            System.out.println(devices[i] + "," + total[i] + "," + sent[i]);
+        }
+    }
+
+
 
 }

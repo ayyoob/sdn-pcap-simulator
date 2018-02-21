@@ -5,6 +5,7 @@ import java.util.List;
 public class SimPacket {
 
     private long size;
+    private String dhcpHostname;
     private String srcMac;
     private String dstMac;
     private String ethType;
@@ -24,7 +25,7 @@ public class SimPacket {
         OTHER
     }
 
-    public String isDnsQname() {
+    public String getdnsQname() {
         return dnsQname;
     }
 

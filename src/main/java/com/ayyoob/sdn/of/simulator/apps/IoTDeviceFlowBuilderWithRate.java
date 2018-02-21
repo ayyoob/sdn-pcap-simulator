@@ -1,7 +1,6 @@
 package com.ayyoob.sdn.of.simulator.apps;
 
 import com.ayyoob.sdn.of.simulator.*;
-import org.apache.commons.lang3.ArrayUtils;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
@@ -9,7 +8,7 @@ import java.io.*;
 import java.nio.file.Paths;
 import java.util.*;
 
-public class IoTDeviceFlowBuilder implements ControllerApp {
+public class IoTDeviceFlowBuilderWithRate implements ControllerApp {
 
     private static final int COMMON_FLOW_PRIORITY = 1000;
     private static final int D2G_FIXED_FLOW_PRIORITY = 850;
@@ -25,17 +24,15 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
     private static final int SKIP_FLOW_HIGHER_PRIORITY = 950;
     private static String ignoreMacPrefix[] = {"01:00:5E", "33:33", "FF:FF:FF"};
 
-    private static final long MAX_FLOWS_PER_DEVICE = 5;
-    private static final int MIN_FLOW_IMPACT_THRESHOLD = 5; //percentage
+    private static final long MAX_FLOWS_PER_DEVICE = 500;
+    private static final double MIN_FLOW_IMPACT_THRESHOLD = 2; //percentage
     private static final long MIN_TIME_FOR_FLOWS_MILLI_SECONDS = 120000;
 
-    private static Map<OFFlow, Long> deviceFlowTimeMap = new HashMap<OFFlow, Long>();
-    private static Map<String, long[]> deviceFlowPacketCountBeenRemoved = new HashMap<String, long[]>();
     private static boolean enabled = true;
     private static List<String> devices = new ArrayList<String>();
-    private static boolean logger = true;
-    private static boolean initMem =true;
-    private static boolean initPerf =true;
+    private static boolean logger = false;
+    private static boolean initMem =false;
+    private static boolean initPerf =false;
 
     public void init(JSONObject jsonObject) {
         enabled = (Boolean) jsonObject.get("isIoTDeviceFlowBuilderEnable");
@@ -55,7 +52,6 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
             return;
         }
         logPerformance(dpId,1);
-        logMemoryUsage(dpId);
         String srcMac = packet.getSrcMac();
         String destMac = packet.getDstMac();
         OFSwitch ofSwitch = OFController.getInstance().getSwitch(dpId);
@@ -106,18 +102,12 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                         ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
                         ofFlow.setPriority(D2G_FIXED_FLOW_PRIORITY);
 
-                        long packetCountTransmitted = 0;
                         List<OFFlow> deviceFlows = getActiveFlows(dpId, deviceMac, D2G_DYNAMIC_FLOW_PRIORITY);
                         for (OFFlow flow : deviceFlows) {
                             if (flow.getIpProto().equals(protocol) && flow.getDstPort().equals(dstPort)) {
-                                packetCountTransmitted += flow.getPacketCount();
                                 removeFlow(dpId, flow, deviceMac);
                             }
                         }
-                        long count[] = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-                        count[0] = count[0] - packetCountTransmitted;
-                        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
-                        ofFlow.setPacketCount(packetCountTransmitted);
 
                         OFController.getInstance().addFlow(dpId, ofFlow);
 
@@ -131,18 +121,12 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                         ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
                         ofFlow.setPriority(G2D_FIXED_FLOW_PRIORITY);
 
-                        packetCountTransmitted = 0;
                         deviceFlows = getActiveFlows(dpId, deviceMac, G2D_DYNAMIC_FLOW_PRIORITY);
                         for (OFFlow flow : deviceFlows) {
                             if (flow.getIpProto().equals(protocol) && flow.getSrcPort().equals(dstPort)) {
-                                packetCountTransmitted += flow.getPacketCount();
                                 removeFlow(dpId, flow, deviceMac);
                             }
                         }
-                        count = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-                        count[0] = count[0] - packetCountTransmitted;
-                        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
-                        ofFlow.setPacketCount(packetCountTransmitted);
 
                         OFController.getInstance().addFlow(dpId, ofFlow);
                     } else if (protocol.equals(Constants.TCP_PROTO) && packet.getTcpFlag() == SimPacket.Flag.SYN_ACK) {
@@ -154,18 +138,12 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                         ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
                         ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
                         ofFlow.setPriority(D2G_FIXED_FLOW_PRIORITY);
-                        long packetCountTransmitted = 0;
                         List<OFFlow> deviceFlows = getActiveFlows(dpId, deviceMac, D2G_DYNAMIC_FLOW_PRIORITY);
                         for (OFFlow flow : deviceFlows) {
                             if (flow.getIpProto().equals(protocol) && flow.getSrcPort().equals(srcPort)) {
-                                packetCountTransmitted += flow.getPacketCount();
                                 removeFlow(dpId, flow, deviceMac);
                             }
                         }
-                        long count[] = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-                        count[0] = count[0] - packetCountTransmitted;
-                        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
-                        ofFlow.setPacketCount(packetCountTransmitted);
                         OFController.getInstance().addFlow(dpId, ofFlow);
 
 
@@ -177,18 +155,12 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                         ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
                         ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
                         ofFlow.setPriority(G2D_FIXED_FLOW_PRIORITY);
-                        packetCountTransmitted = 0;
                         deviceFlows = getActiveFlows(dpId, deviceMac, G2D_DYNAMIC_FLOW_PRIORITY);
                         for (OFFlow flow : deviceFlows) {
                             if (flow.getIpProto().equals(protocol) && flow.getDstPort().equals(srcPort)) {
-                                packetCountTransmitted += flow.getPacketCount();
                                 removeFlow(dpId, flow, deviceMac);
                             }
                         }
-                        count = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-                        count[0] = count[0] - packetCountTransmitted;
-                        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
-                        ofFlow.setPacketCount(packetCountTransmitted);
                         OFController.getInstance().addFlow(dpId, ofFlow);
                     } else {
                         OFFlow ofFlow = new OFFlow();
@@ -215,18 +187,12 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                         ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
                         ofFlow.setPriority(G2D_FIXED_FLOW_PRIORITY);
 
-                        long packetCountTransmitted = 0;
                         List<OFFlow> deviceFlows = getActiveFlows(dpId, deviceMac, G2D_DYNAMIC_FLOW_PRIORITY);
                         for (OFFlow flow : deviceFlows) {
                             if (flow.getIpProto().equals(protocol) && flow.getDstPort().equals(dstPort)) {
-                                packetCountTransmitted += flow.getPacketCount();
                                 removeFlow(dpId, flow, deviceMac);
                             }
                         }
-                        long count[] = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-                        count[0] = count[0] - packetCountTransmitted;
-                        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
-                        ofFlow.setPacketCount(packetCountTransmitted);
 
                         OFController.getInstance().addFlow(dpId, ofFlow);
 
@@ -239,18 +205,12 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                         ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
                         ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
                         ofFlow.setPriority(D2G_FIXED_FLOW_PRIORITY);
-                        packetCountTransmitted = 0;
                         deviceFlows = getActiveFlows(dpId, deviceMac, D2G_DYNAMIC_FLOW_PRIORITY);
                         for (OFFlow flow : deviceFlows) {
                             if (flow.getIpProto().equals(protocol) && flow.getSrcPort().equals(dstPort)) {
-                                packetCountTransmitted += flow.getPacketCount();
                                 removeFlow(dpId, flow, deviceMac);
                             }
                         }
-                        count = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-                        count[0] = count[0] - packetCountTransmitted;
-                        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
-                        ofFlow.setPacketCount(packetCountTransmitted);
                         OFController.getInstance().addFlow(dpId, ofFlow);
                     } else if (protocol.equals(Constants.TCP_PROTO) && packet.getTcpFlag() == SimPacket.Flag.SYN_ACK) {
                         OFFlow ofFlow = new OFFlow();
@@ -261,18 +221,12 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                         ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
                         ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
                         ofFlow.setPriority(G2D_FIXED_FLOW_PRIORITY);
-                        long packetCountTransmitted = 0;
                         List<OFFlow> deviceFlows = getActiveFlows(dpId, deviceMac, G2D_DYNAMIC_FLOW_PRIORITY);
                         for (OFFlow flow : deviceFlows) {
                             if (flow.getIpProto().equals(protocol) && flow.getSrcPort().equals(srcPort)) {
-                                packetCountTransmitted += flow.getPacketCount();
                                 removeFlow(dpId, flow, deviceMac);
                             }
                         }
-                        long count[] = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-                        count[0] = count[0] - packetCountTransmitted;
-                        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
-                        ofFlow.setPacketCount(packetCountTransmitted);
                         OFController.getInstance().addFlow(dpId, ofFlow);
 
 
@@ -284,18 +238,12 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                         ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
                         ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
                         ofFlow.setPriority(D2G_FIXED_FLOW_PRIORITY);
-                        packetCountTransmitted = 0;
                         deviceFlows = getActiveFlows(dpId, deviceMac, D2G_DYNAMIC_FLOW_PRIORITY);
                         for (OFFlow flow : deviceFlows) {
                             if (flow.getIpProto().equals(protocol) && flow.getDstPort().equals(srcPort)) {
-                                packetCountTransmitted += flow.getPacketCount();
                                 removeFlow(dpId, flow, deviceMac);
                             }
                         }
-                        count = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-                        count[0] = count[0] - packetCountTransmitted;
-                        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
-                        ofFlow.setPacketCount(packetCountTransmitted);
                         OFController.getInstance().addFlow(dpId, ofFlow);
                     } else {
                         OFFlow ofFlow = new OFFlow();
@@ -321,18 +269,12 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                         ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
                         ofFlow.setPriority(L2D_FIXED_FLOW_PRIORITY);
 
-                        long packetCountTransmitted = 0;
                         List<OFFlow> deviceFlows = getActiveFlows(dpId, deviceMac, L2D_DYNAMIC_FLOW_PRIORITY);
                         for (OFFlow flow : deviceFlows) {
                             if (flow.getIpProto().equals(protocol) && flow.getDstPort().equals(dstPort)) {
-                                packetCountTransmitted += flow.getPacketCount();
                                 removeFlow(dpId, flow, deviceMac);
                             }
                         }
-                        long count[] = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-                        count[0] = count[0] - packetCountTransmitted;
-                        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
-                        ofFlow.setPacketCount(packetCountTransmitted);
 
                         OFController.getInstance().addFlow(dpId, ofFlow);
 
@@ -356,19 +298,12 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                         ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
                         ofFlow.setPriority(L2D_FIXED_FLOW_PRIORITY);
 
-                        long packetCountTransmitted = 0;
                         List<OFFlow> deviceFlows = getActiveFlows(dpId, deviceMac, L2D_DYNAMIC_FLOW_PRIORITY);
                         for (OFFlow flow : deviceFlows) {
                             if (flow.getIpProto().equals(protocol) && flow.getDstPort().equals(srcPort)) {
-                                packetCountTransmitted += flow.getPacketCount();
                                 removeFlow(dpId, flow, deviceMac);
                             }
                         }
-                        long count[] = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-                        count[0] = count[0] - packetCountTransmitted;
-                        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
-                        ofFlow.setPacketCount(packetCountTransmitted);
-
                         OFController.getInstance().addFlow(dpId, ofFlow);
 
 
@@ -400,46 +335,36 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
     private void addFlow(String dpId, OFFlow ofFlow, String deviceMac) {
         List<OFFlow> deviceFlows = getActiveFlows(dpId, deviceMac, ofFlow.getPriority());
         if (deviceFlows.size() < MAX_FLOWS_PER_DEVICE) {
-            deviceFlowTimeMap.put(ofFlow, OFController.getInstance().getSwitch(dpId).getCurrentTime());
+            ofFlow.setCreatedTimestamp(OFController.getInstance().getSwitch(dpId).getCurrentTime());
             OFController.getInstance().addFlow(dpId, ofFlow);
         } else {
             OFFlow tobeRemoved = null;
-            long totalPacket = getTotalPacketCount(dpId, deviceMac, ofFlow.getPriority());
-
-            long count[] = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-            if (ofFlow.getPriority() == D2G_DYNAMIC_FLOW_PRIORITY) {
-                totalPacket = totalPacket + count[0];
-            } else if (ofFlow.getPriority() == G2D_DYNAMIC_FLOW_PRIORITY) {
-                totalPacket = totalPacket + count[1];
-            } else if (ofFlow.getPriority() == L2D_DYNAMIC_FLOW_PRIORITY) {
-                totalPacket = totalPacket + count[2];
-            }
-
+            double packetCountRateForPriorityLevel = getTotalPacketCountRate(dpId, deviceMac, ofFlow.getPriority());
             int flowsConsideredForRemoval = 0;
             for (OFFlow flow : deviceFlows) {
 
                 long currentTime = OFController.getInstance().getSwitch(dpId).getCurrentTime();
-                long flowInitializedTime = deviceFlowTimeMap.get(flow);
+                long flowInitializedTime = flow.getCreatedTimestamp();
+                long age = currentTime - flowInitializedTime;
                 if (currentTime - flowInitializedTime > MIN_TIME_FOR_FLOWS_MILLI_SECONDS) {
                     if (tobeRemoved == null) {
-                        Double flowImpact = (flow.getPacketCount() * 1.0) / totalPacket;
+                        Double flowImpact = ((flow.getPacketCount() * 1.0)/age) / packetCountRateForPriorityLevel;
                         if (MIN_FLOW_IMPACT_THRESHOLD > (flowImpact * 100)) {
                             tobeRemoved = flow;
                             flowsConsideredForRemoval++;
                         }
                     } else {
                         flowsConsideredForRemoval++;
-                        Double flowImpact = (flow.getPacketCount() * 1.0) / totalPacket;
-                        Double tobeRemovedFlowImpact = (tobeRemoved.getPacketCount() * 1.0) / totalPacket;
+                        Double flowImpact = ((flow.getPacketCount() * 1.0)/age) / packetCountRateForPriorityLevel;
+                        Double tobeRemovedFlowImpact = ((tobeRemoved.getPacketCount() * 1.0)/age) / packetCountRateForPriorityLevel;
                         if (tobeRemovedFlowImpact > flowImpact) {
                             tobeRemoved = flow;
                         }
                     }
                 }
             }
-            if (tobeRemoved != null && flowsConsideredForRemoval > 1) {
+            if (tobeRemoved != null && flowsConsideredForRemoval >= 1) {
                 removeFlow(dpId, tobeRemoved, deviceMac);
-                deviceFlowTimeMap.put(ofFlow, OFController.getInstance().getSwitch(dpId).getCurrentTime());
                 OFController.getInstance().addFlow(dpId, ofFlow);
             }
 
@@ -448,17 +373,17 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
 
     private void removeFlow(String dpId, OFFlow ofFlow, String deviceMac) {
 
-        deviceFlowTimeMap.remove(ofFlow);
-
-        long count[] = deviceFlowPacketCountBeenRemoved.get(deviceMac);
-        if (ofFlow.getPriority() == D2G_DYNAMIC_FLOW_PRIORITY) {
-            count[0] = count[0] + ofFlow.getPacketCount();
-        } else if (ofFlow.getPriority() == G2D_DYNAMIC_FLOW_PRIORITY) {
-            count[1] = count[1] + ofFlow.getPacketCount();
-        } else if (ofFlow.getPriority() == L2D_DYNAMIC_FLOW_PRIORITY) {
-            count[2] = count[2] + ofFlow.getPacketCount();
-        }
-        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
+//        deviceFlowTimeMap.remove(ofFlow);
+//
+//        long count[] = deviceFlowPacketCountBeenRemoved.get(deviceMac);
+//        if (ofFlow.getPriority() == D2G_DYNAMIC_FLOW_PRIORITY) {
+//            count[0] = count[0] + ofFlow.getPacketCount();
+//        } else if (ofFlow.getPriority() == G2D_DYNAMIC_FLOW_PRIORITY) {
+//            count[1] = count[1] + ofFlow.getPacketCount();
+//        } else if (ofFlow.getPriority() == L2D_DYNAMIC_FLOW_PRIORITY) {
+//            count[2] = count[2] + ofFlow.getPacketCount();
+//        }
+//        deviceFlowPacketCountBeenRemoved.put(deviceMac, count);
         OFController.getInstance().removeFlow(dpId, ofFlow);
     }
 
@@ -500,13 +425,26 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
         return deviceFlowList;
     }
 
-    public long getTotalPacketCount(String dpId, String deviceMac, int priority) {
-        long totalPacketCount = 0;
+//    public long getTotalPacketCount(String dpId, String deviceMac, int priority) {
+//        long totalPacketCount = 0;
+//
+//        List<OFFlow> deviceFlows = getActiveFlows(dpId, deviceMac);
+//        for (OFFlow ofFlow : deviceFlows) {
+//            if (ofFlow.getPriority() == priority || ofFlow.getPriority() == (priority - 10) || ofFlow.getPriority() == (priority + 40)) {
+//                totalPacketCount = totalPacketCount + ofFlow.getPacketCount();
+//            }
+//        }
+//
+//        return totalPacketCount;
+//    }
+    public double getTotalPacketCountRate(String dpId, String deviceMac, int priority) {
+        double totalPacketCount = 0;
 
         List<OFFlow> deviceFlows = getActiveFlows(dpId, deviceMac);
         for (OFFlow ofFlow : deviceFlows) {
             if (ofFlow.getPriority() == priority || ofFlow.getPriority() == (priority - 10) || ofFlow.getPriority() == (priority + 40)) {
-                totalPacketCount = totalPacketCount + ofFlow.getPacketCount();
+                totalPacketCount = totalPacketCount +( (ofFlow.getPacketCount()*1.0)/
+                        (OFController.getInstance().getSwitch(dpId).getCurrentTime()- ofFlow.getCreatedTimestamp()));
             }
         }
 
@@ -697,7 +635,6 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
         OFController.getInstance().addFlow(dpId, ofFlow);
 
         long flowCount[] = {0, 0, 0};
-        deviceFlowPacketCountBeenRemoved.put(deviceMac, flowCount);
     }
 
     public void complete() {
@@ -709,13 +646,16 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
             List<OFFlow> flowsTobeRemoved = new ArrayList<OFFlow>();
             List<OFFlow> flowsTobeAdded = new ArrayList<>();
             for (String deviceMac : devices) {
-                long totalPacketCount = getTotalPacketCount(dpId, deviceMac, D2G_DYNAMIC_FLOW_PRIORITY);
+                double totalPacketCountRate = getTotalPacketCountRate(dpId, deviceMac, D2G_DYNAMIC_FLOW_PRIORITY);
                 List<Integer> priorities = new ArrayList<>();
                 priorities.add(D2G_DYNAMIC_FLOW_PRIORITY);
-                priorities.add(D2G_FIXED_FLOW_PRIORITY);
+                //priorities.add(D2G_FIXED_FLOW_PRIORITY);
                 List<OFFlow> ofFlows = getActiveFlowsForPriorities(dpId, deviceMac, priorities);
+                long currentTime = OFController.getInstance().getSwitch(dpId).getCurrentTime();
                 for (OFFlow ofFlow : ofFlows) {
-                    Double flowImpact = (ofFlow.getPacketCount() * 1.0) / totalPacketCount;
+                    long flowInitializedTime = ofFlow.getCreatedTimestamp();
+                    long age = currentTime - flowInitializedTime;
+                    Double flowImpact = ((ofFlow.getPacketCount() * 1.0)/age) / totalPacketCountRate;
                     if ((flowImpact * 100) < MIN_FLOW_IMPACT_THRESHOLD) {
                         flowsTobeRemoved.add(ofFlow);
                         if (ofFlow.getPriority() == D2G_FIXED_FLOW_PRIORITY) {
@@ -738,13 +678,15 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                 }
 
 
-                totalPacketCount = getTotalPacketCount(dpId, deviceMac, G2D_DYNAMIC_FLOW_PRIORITY);
+                totalPacketCountRate = getTotalPacketCountRate(dpId, deviceMac, G2D_DYNAMIC_FLOW_PRIORITY);
                 priorities = new ArrayList<>();
                 priorities.add(G2D_DYNAMIC_FLOW_PRIORITY);
-                priorities.add(G2D_FIXED_FLOW_PRIORITY);
+                //priorities.add(G2D_FIXED_FLOW_PRIORITY);
                 ofFlows = getActiveFlowsForPriorities(dpId, deviceMac, priorities);
                 for (OFFlow ofFlow : ofFlows) {
-                    Double flowImpact = (ofFlow.getPacketCount() * 1.0) / totalPacketCount;
+                    long flowInitializedTime = ofFlow.getCreatedTimestamp();
+                    long age = currentTime - flowInitializedTime;
+                    Double flowImpact = ((ofFlow.getPacketCount() * 1.0)/age) / totalPacketCountRate;
                     if ((flowImpact * 100) < MIN_FLOW_IMPACT_THRESHOLD) {
                         flowsTobeRemoved.add(ofFlow);
                         if (ofFlow.getPriority() == G2D_FIXED_FLOW_PRIORITY) {
@@ -765,13 +707,15 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
                     }
                 }
 
-                totalPacketCount = getTotalPacketCount(dpId, deviceMac, L2D_DYNAMIC_FLOW_PRIORITY);
+                totalPacketCountRate = getTotalPacketCountRate(dpId, deviceMac, L2D_DYNAMIC_FLOW_PRIORITY);
                 priorities = new ArrayList<>();
                 priorities.add(L2D_DYNAMIC_FLOW_PRIORITY);
-                priorities.add(L2D_FIXED_FLOW_PRIORITY);
+                //priorities.add(L2D_FIXED_FLOW_PRIORITY);
                 ofFlows = getActiveFlowsForPriorities(dpId, deviceMac, priorities);
                 for (OFFlow ofFlow : ofFlows) {
-                    Double flowImpact = (ofFlow.getPacketCount() * 1.0) / totalPacketCount;
+                    long flowInitializedTime = ofFlow.getCreatedTimestamp();
+                    long age = currentTime - flowInitializedTime;
+                    Double flowImpact = ((ofFlow.getPacketCount() * 1.0)/age) / totalPacketCountRate;
                     if ((flowImpact * 100) < MIN_FLOW_IMPACT_THRESHOLD) {
                         flowsTobeRemoved.add(ofFlow);
                         if (ofFlow.getPriority() == L2D_FIXED_FLOW_PRIORITY) {
@@ -840,35 +784,6 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
             logPerformance(dpId, 0);
         }
 
-
-    }
-
-    private static void logMemoryUsage(String dpId) {
-        if(!logger) {
-            return;
-        }
-        try{
-            ByteArrayOutputStream baos=new ByteArrayOutputStream();
-            ObjectOutputStream oos=new ObjectOutputStream(baos);
-            oos.writeObject(deviceFlowPacketCountBeenRemoved);
-            oos.writeObject(deviceFlowTimeMap);
-            oos.close();
-            String currentPath = Paths.get(".").toAbsolutePath().normalize().toString();
-            String loggerFilePath = currentPath + File.separator + "result";
-            File file = new File(loggerFilePath + File.separator + dpId + "_"+ "memoryoutput.csv");
-            FileWriter writer = new FileWriter(file, true);
-            String record = OFController.getInstance().getSwitch(dpId).getCurrentTime() + "," + baos.size();
-            if (!initMem) {
-                writer.write( "timestamp,stat\n");
-                initMem = true;
-            }
-            writer.write(record + "\n");
-            writer.flush();
-            writer.close();
-
-        }catch(IOException e){
-            e.printStackTrace();
-        }
 
     }
 
