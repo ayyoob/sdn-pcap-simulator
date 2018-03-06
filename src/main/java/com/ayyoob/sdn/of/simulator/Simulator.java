@@ -1,6 +1,7 @@
 package com.ayyoob.sdn.of.simulator;
 
 import com.ayyoob.sdn.of.simulator.apps.ControllerApp;
+import com.ayyoob.sdn.of.simulator.apps.StatListener;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -59,6 +60,21 @@ public class Simulator {
 
             OFController.getInstance().registerApps(controllerApp, arg);
         }
+        JSONArray statModules = (JSONArray) jsonObject.get("statModules");
+        iterator = statModules.iterator();
+        while (iterator.hasNext()) {
+            String fqClassName = iterator.next();
+            String spilitClassName[] = fqClassName.split("\\.");
+            String className = spilitClassName[spilitClassName.length-1];
+            JSONObject arg = (JSONObject) moduleConfig.get(className);
+
+            Class<?> clazz = Class.forName(fqClassName);
+            Constructor<?> ctor = clazz.getConstructor();
+            StatListener statListener = (StatListener) ctor.newInstance();
+
+            OFController.getInstance().registerStatListeners(statListener, arg);
+        }
+
         processPcap(pcapLocation, ofSwitch);
         OFController.getInstance().complete();
         OFController.getInstance().printStats();
@@ -180,7 +196,6 @@ public class Simulator {
         } catch (TimeoutException e) {
             e.printStackTrace();
         }
-        ofSwitch.printDevice();
         System.out.println("Average Packet Processing Time " + (sumPacketProcessingTime *1.0)/totalPacketCount);
         System.out.println("Timetaken: " + (endTimestamp-startTimestamp) + ", Total Packets: " + totalPacketCount);
     }

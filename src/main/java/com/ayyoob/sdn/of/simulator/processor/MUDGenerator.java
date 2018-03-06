@@ -13,8 +13,8 @@ import java.util.*;
 
 public class MUDGenerator {
 
-	private static String deviceName = "wemomotion";
-	private static String deviceMac = "ec:1a:59:83:28:11";
+	private static String deviceName = "chromecast";
+	private static String deviceMac = "6c:ad:f8:5e:e4:61";
 	private static final int COMMON_FLOW_PRIORITY = 1000;
 	private static final int D2G_PRIORITY = 800;
 	private static final int G2D_PRIORITY = 700;
@@ -25,9 +25,13 @@ public class MUDGenerator {
 	private static final String DEFAULTGATEWAYCONTROLLER = "urn:ietf:params:mud:gateway";
 	private static final String DEFAULT_GATEWAY_IP = "192.168.1.1";
 	private static final String LOCAL_TAG = "localTAG";
+	private static final String STUN_PROTO_PORT = "3478";
+	private static final int MAX_IP_PER_PROTO = 3;
 
 
 	public static void main(String[] args) throws JsonProcessingException, FileNotFoundException, UnsupportedEncodingException {
+
+
 
 		String currentPath = Paths.get(".").toAbsolutePath().normalize().toString();
 
@@ -74,7 +78,8 @@ public class MUDGenerator {
 		Map<String, OFFlow> commonFlowMap= new HashMap<>();
 		Map<String, OFFlow> fromDeviceMap= new HashMap<>();
 		Map<String, OFFlow> toDeviceMap= new HashMap<>();
-		Map<OFFlow, String> localMap= new HashMap<>();
+
+		boolean stunEnabled = false;
 
 		try (BufferedReader br = new BufferedReader(new FileReader(ipflowFile))) {
 			String line;
@@ -103,7 +108,8 @@ public class MUDGenerator {
 					} else {
 						if (ofFlow.getPriority()>COMMON_FLOW_PRIORITY) {
 							String key = ofFlow.getIpProto() + "|" + ofFlow.getDstPort() + "|";
-							if(validIP(ofFlow.getDstIp()) && ofFlow.getPacketCount() < MIN_PACKET_COUNT_THRESHOLD) {
+							if(validIP(ofFlow.getDstIp()) && (ofFlow.getPacketCount() < MIN_PACKET_COUNT_THRESHOLD
+									|| ofFlow.getDstPort().equals("1900"))) {
 								continue;
 							}
 							OFFlow flow = commonFlowMap.get(key);
@@ -114,7 +120,26 @@ public class MUDGenerator {
 								commonFlowMap.put(key, flow);
 							}
 						} else if (ofFlow.getPriority()>D2G_PRIORITY && ofFlow.getPriority() < D2G_PRIORITY + 100) {
+							if (validIP(ofFlow.getDstIp()) && ofFlow.getPacketCount() == 0) {
+								continue;
+							}
 							String key = ofFlow.getIpProto() + "|" + ofFlow.getDstPort() + "|" + ofFlow.getSrcPort();
+							if (ofFlow.getIpProto().equals(Constants.UDP_PROTO) && ofFlow.getDstPort().equals(STUN_PROTO_PORT)) {
+								stunEnabled = true;
+								fromDeviceMap.remove(key);
+								ofFlow.setDstPort("*");
+								ofFlow.setDstIp("*");
+								key = ofFlow.getIpProto() + "|" + ofFlow.getDstPort() + "|" + ofFlow.getSrcPort();
+								for (String keys : fromDeviceMap.keySet()) {
+									if (keys.contains("17|")) {
+										fromDeviceMap.remove(keys);
+									}
+								}
+								fromDeviceMap.put(key, ofFlow);
+								continue;
+							} else if (stunEnabled && ofFlow.getIpProto().equals(Constants.UDP_PROTO) ) {
+								continue;
+							}
 							OFFlow flow = fromDeviceMap.get(key);
 							if (flow == null) {
 								fromDeviceMap.put(key, ofFlow);
@@ -123,7 +148,28 @@ public class MUDGenerator {
 								fromDeviceMap.put(key, flow);
 							}
 						} else if (ofFlow.getPriority()>G2D_PRIORITY && ofFlow.getPriority() < G2D_PRIORITY + 100) {
+							if (validIP(ofFlow.getSrcIp()) && ofFlow.getPacketCount() == 0) {
+								continue;
+							}
 							String key = ofFlow.getIpProto() + "|" + ofFlow.getDstPort() + "|" + ofFlow.getSrcPort();
+							if (ofFlow.getIpProto().equals(Constants.UDP_PROTO) && ofFlow.getSrcPort().equals(STUN_PROTO_PORT)) {
+								stunEnabled = true;
+								toDeviceMap.remove(key);
+								ofFlow.setSrcPort("*");
+								ofFlow.setSrcIp("*");
+								key = ofFlow.getIpProto() + "|" + ofFlow.getDstPort() + "|" + ofFlow.getSrcPort();
+
+								for (String keys : toDeviceMap.keySet()) {
+									if (keys.contains("17|")) {
+										toDeviceMap.remove(keys);
+									}
+								}
+
+								toDeviceMap.put(key, ofFlow);
+								continue;
+							} else if (stunEnabled && ofFlow.getIpProto().equals(Constants.UDP_PROTO) ) {
+								continue;
+							}
 							OFFlow flow = toDeviceMap.get(key);
 							if (flow == null) {
 								toDeviceMap.put(key, ofFlow);
@@ -132,14 +178,13 @@ public class MUDGenerator {
 								toDeviceMap.put(key, flow);
 							}
 						} else if (ofFlow.getPriority()>L2D_PRIORITY && ofFlow.getPriority() < L2D_PRIORITY + 100) {
-							if (ofFlow.getPacketCount() > MIN_PACKET_COUNT_THRESHOLD) {
+							if (ofFlow.getPacketCount() > MIN_PACKET_COUNT_THRESHOLD || ofFlow.getDstPort().equals("1900")) {
 								if (ofFlow.getSrcMac().equals(deviceMac)) {
 									ofFlow.setSrcMac(DEVICETAG);
 								} else if (ofFlow.getDstMac().equals(deviceMac)) {
 									ofFlow.setDstMac(DEVICETAG);
 								}
 								localDevice.add(ofFlow);
-								localMap.get(ofFlow);
 							}
 						}
 					}
@@ -173,6 +218,21 @@ public class MUDGenerator {
 			for (String key :fromDeviceMap.keySet()) {
 				OFFlow ofFlow = fromDeviceMap.get(key);
 				Set<String> dsts = new HashSet<String>(Arrays.asList(ofFlow.getDstIp().split("\\|")));
+
+				int ipCounter = 0;
+				for (String dstLocation : dsts) {
+					if (validIP(dstLocation)) {
+						ipCounter++;
+					}
+				}
+				if (ipCounter >= MAX_IP_PER_PROTO) {
+					OFFlow deviceFlow = ofFlow.copy();
+					deviceFlow.setSrcMac(DEVICETAG);
+					deviceFlow.setDstMac(GATEWAYTAG);
+					deviceFlow.setDstIp("*");
+					fromDevice.add(deviceFlow);
+					continue;
+				}
 				for (String dstLocation : dsts) {
 					OFFlow deviceFlow = ofFlow.copy();
 					deviceFlow.setSrcMac(DEVICETAG);
@@ -186,6 +246,22 @@ public class MUDGenerator {
 			for (String key :toDeviceMap.keySet()) {
 				OFFlow ofFlow = toDeviceMap.get(key);
 				Set<String> dsts = new HashSet<String>(Arrays.asList(ofFlow.getSrcIp().split("\\|")));
+
+				int ipCounter = 0;
+				for (String dstLocation : dsts) {
+					if (validIP(dstLocation)) {
+						ipCounter++;
+					}
+				}
+				if (ipCounter >= MAX_IP_PER_PROTO) {
+					OFFlow deviceFlow = ofFlow.copy();
+					deviceFlow.setDstMac(DEVICETAG);
+					deviceFlow.setSrcMac(GATEWAYTAG);
+					deviceFlow.setSrcIp("*");
+					fromDevice.add(deviceFlow);
+					continue;
+				}
+
 				for (String dstLocation : dsts) {
 					OFFlow deviceFlow = ofFlow.copy();
 					deviceFlow.setDstMac(DEVICETAG);
@@ -197,7 +273,7 @@ public class MUDGenerator {
 
 			PrintWriter ruleOut = new PrintWriter(currentPath + File.separator + "result"
 					+ File.separator + deviceName + "rule.csv", "UTF-8");
-			ruleOut.println("srcMac,dstMac,ethType,vlanId,srcIp,dstIp,ipProto,srcPort,dstPort,priority");
+			ruleOut.println("srcMac,dstMac,ethType,srcIp,dstIp,ipProto,srcPort,dstPort,priority");
 			printList(fromDevice, ruleOut);
 			printList(toDevice, ruleOut);
 			printList(localDevice,ruleOut);
@@ -253,7 +329,7 @@ public class MUDGenerator {
 			} else {
 				if (validIP(ofFlow.getDstIp())) {
 					ipv4Match.setDestinationIp(ofFlow.getDstIp() +"/32");
-				} else {
+				} else if(!ofFlow.getDstIp().equals("*")) {
 					ipv4Match.setDstDnsName(ofFlow.getDstIp());
 				}
 			}
@@ -268,7 +344,7 @@ public class MUDGenerator {
 					portMatch.setOperator("eq");
 					portMatch.setPort(Integer.parseInt(ofFlow.getDstPort()));
 					tcpMatch.setDestinationPortMatch(portMatch);
-				} else {
+				} else if (!"*".equals(ofFlow.getSrcPort())) {
 					PortMatch portMatch = new PortMatch();
 					portMatch.setOperator("eq");
 					portMatch.setPort(Integer.parseInt(ofFlow.getSrcPort()));
@@ -285,7 +361,7 @@ public class MUDGenerator {
 					portMatch.setOperator("eq");
 					portMatch.setPort(Integer.parseInt(ofFlow.getDstPort()));
 					udpMatch.setDestinationPortMatch(portMatch);
-				} else {
+				} else if (!"*".equals(ofFlow.getSrcPort())){
 					PortMatch portMatch = new PortMatch();
 					portMatch.setOperator("eq");
 					portMatch.setPort(Integer.parseInt(ofFlow.getSrcPort()));
@@ -335,7 +411,7 @@ public class MUDGenerator {
 			} else {
 				if (validIP(ofFlow.getSrcIp())) {
 					ipv4Match.setSourceIp(ofFlow.getSrcIp() +"/32");
-				} else {
+				} else if(!ofFlow.getSrcIp().equals("*")){
 					ipv4Match.setSrcDnsName(ofFlow.getSrcIp());
 				}
 			}
@@ -350,7 +426,7 @@ public class MUDGenerator {
 					portMatch.setOperator("eq");
 					portMatch.setPort(Integer.parseInt(ofFlow.getSrcPort()));
 					tcpMatch.setSourcePortMatch(portMatch);
-				} else {
+				} else if (!"*".equals(ofFlow.getDstPort())) {
 					PortMatch portMatch = new PortMatch();
 					portMatch.setOperator("eq");
 					portMatch.setPort(Integer.parseInt(ofFlow.getDstPort()));
@@ -367,7 +443,7 @@ public class MUDGenerator {
 					portMatch.setOperator("eq");
 					portMatch.setPort(Integer.parseInt(ofFlow.getSrcPort()));
 					udpMatch.setSourcePortMatch(portMatch);
-				} else {
+				} else if (!"*".equals(ofFlow.getDstPort())) {
 					PortMatch portMatch = new PortMatch();
 					portMatch.setOperator("eq");
 					portMatch.setPort(Integer.parseInt(ofFlow.getDstPort()));
@@ -399,7 +475,10 @@ public class MUDGenerator {
 
 	private static void printList(List<OFFlow> toPrint, PrintWriter out) {
 		for (OFFlow ofFlow : toPrint) {
-			out.println(ofFlow.getFlowStringWithoutFlowStat());
+			ofFlow.setVlanId("NIL");
+			String flowString = ofFlow.getFlowStringWithoutFlowStat();
+			flowString= flowString.replace(",NIL,", ",");
+			out.println(flowString);
 		}
 		out.flush();
 	}

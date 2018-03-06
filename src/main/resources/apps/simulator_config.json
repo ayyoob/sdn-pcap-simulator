@@ -2,15 +2,20 @@
     "modules": [
         "com.ayyoob.sdn.of.simulator.apps.IoTDeviceFlowBuilder",
         "com.ayyoob.sdn.of.simulator.apps.IoTDeviceFlowBuilderWithRate",
-        "com.ayyoob.sdn.of.simulator.apps.SingleSwitchStatsCollector",
         "com.ayyoob.sdn.of.simulator.apps.IoTDNSWorkerSetApp",
         "com.ayyoob.sdn.of.simulator.apps.IoTDeviceFlowBuilderWithRateWithIPs",
-        "com.ayyoob.sdn.of.simulator.apps.MUDBasedIoTDeviceFlowBuilder"
+        "com.ayyoob.sdn.of.simulator.apps.MUDBasedIoTDeviceFlowBuilder",
+        "com.ayyoob.sdn.of.simulator.apps.MUDFlowDeployer"
+    ],
+
+    "statModules": [
+        "com.ayyoob.sdn.of.simulator.apps.SingleSwitchStatsCollector",
+        "com.ayyoob.sdn.of.simulator.apps.MudBasedSingleSwitchStatsCollector"
     ],
 
     "switchConfig": {
-        "dpId" : "14:CC:20:51:33:EA",
-        "macAddress": "14:CC:20:51:33:EA",
+        "dpId" : "14:cc:20:51:33:ea",
+        "macAddress": "14:cc:20:51:33:ea",
         "ipAddress": "192.168.1.1"
     },
 
@@ -33,8 +38,8 @@
         },
 
         "MUDBasedIoTDeviceFlowBuilder":{
-            "enable": true,
-            "devices":["ec:1a:59:83:28:11"]
+            "enable": false,
+            "devices":["b4:75:0e:ec:e5:a9"]
         },
 
         "IoTDNSWorkerSetApp": {
@@ -43,14 +48,31 @@
             "gateway":"14:CC:20:51:33:EA"
         },
 
+        "MUDFlowDeployer":{
+            "enable": true,
+            "deviceMac" : "44:65:0d:56:cc:d3",
+            "gatewayIp" : "192.168.1.1",
+            "dpId":"14:cc:20:51:33:ea",
+            "idleTimeoutInSeconds": 7200,
+            "mudPath": "/Users/ayyoobhamza/Desktop/unsw/mud/git/MUDpolicy/data/MUDspec/amazonEchoMud.json"
+        },
+
         "SingleSwitchStatsCollector": {
             "enabled": false,
             "summerizationTimeInSeconds": 60,
-            "dpId":"14:CC:20:51:33:EA",
+            "dpId":"14:cc:20:51:33:ea",
             "filename":"00166CAB6B88"
+        },
+
+        "MudBasedSingleSwitchStatsCollector": {
+            "enabled": true,
+            "summerizationTimeInSeconds": 60,
+            "device" : "44:65:0d:56:cc:d3",
+            "dpId":"14:cc:20:51:33:ea",
+            "filePostFix": "7200"
         }
 
     },
 
-    "pcapLocation": "/Users/ayyoobhamza/Desktop/dinesh/mud/pcap/ec1a59832811.pcap"
+    "pcapLocation": "/Users/ayyoobhamza/Desktop/unsw/mud/pcap/44650d56ccd3.pcap"
 }

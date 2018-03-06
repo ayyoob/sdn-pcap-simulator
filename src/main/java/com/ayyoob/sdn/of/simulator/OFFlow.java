@@ -18,6 +18,8 @@ public class OFFlow implements Serializable{
     private int priority;
     private long volumeTransmitted = 0;
     private long packetCount = 0;
+    private long idleTimeOut = 0;
+    private long lastPacketTransmittedTime;
 
     public OFFlow copy() {
         OFFlow ofFlow = new OFFlow();
@@ -173,6 +175,22 @@ public class OFFlow implements Serializable{
 
     public void setVolumeTransmitted(long volumeTransmitted) {
         this.volumeTransmitted = volumeTransmitted;
+    }
+
+    public long getIdleTimeOut() {
+        return idleTimeOut;
+    }
+
+    public void setIdleTimeOut(long idleTimeOut) {
+        this.idleTimeOut = idleTimeOut;
+    }
+
+    public long getLastPacketTransmittedTime() {
+        return lastPacketTransmittedTime;
+    }
+
+    public void setLastPacketTransmittedTime(long lastPacketTransmittedTime) {
+        this.lastPacketTransmittedTime = lastPacketTransmittedTime;
     }
 
     public String getFlowHeaderString() {

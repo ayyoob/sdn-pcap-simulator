@@ -51,6 +51,9 @@ public class IoTDeviceFlowBuilderWithRate implements ControllerApp {
         if (!enabled) {
             return;
         }
+        if (isIgnored(packet.getSrcMac()) || isIgnored(packet.getDstMac())) {
+            return;
+        }
         logPerformance(dpId,1);
         String srcMac = packet.getSrcMac();
         String destMac = packet.getDstMac();

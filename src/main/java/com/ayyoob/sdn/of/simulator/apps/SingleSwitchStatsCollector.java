@@ -8,8 +8,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SingleSwitchStatsCollector implements ControllerApp {
-    int packetCount=0;
+public class SingleSwitchStatsCollector implements StatListener {
 
     private static boolean enabled = true;
     private static long summerizationTimeInMillis = 60000;
@@ -96,7 +95,6 @@ public class SingleSwitchStatsCollector implements ControllerApp {
 
     @Override
     public void process(String dpId, SimPacket packet) {
-        packetCount++;
         if (!enabled) {
             return;
         }

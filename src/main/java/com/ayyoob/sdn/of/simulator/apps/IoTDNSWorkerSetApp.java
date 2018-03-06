@@ -32,6 +32,7 @@ public class IoTDNSWorkerSetApp implements ControllerApp{
 		if (!enabled) {
 			return;
 		}
+
 		device =( (String) jsonObject.get("device")).toLowerCase();
 		gateway =( (String) jsonObject.get("gateway")).toLowerCase();
 

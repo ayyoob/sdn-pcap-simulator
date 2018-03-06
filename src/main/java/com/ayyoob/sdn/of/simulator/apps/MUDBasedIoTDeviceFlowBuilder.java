@@ -57,6 +57,10 @@ public class MUDBasedIoTDeviceFlowBuilder implements ControllerApp {
             startTime = OFController.getInstance().getSwitch(dpId).getCurrentTime();
 
         }
+        if (isIgnored(packet.getSrcMac()) || isIgnored(packet.getDstMac())) {
+            return;
+        }
+
         logPerformance(dpId,1);
         String srcMac = packet.getSrcMac();
         String destMac = packet.getDstMac();
@@ -878,6 +882,7 @@ public class MUDBasedIoTDeviceFlowBuilder implements ControllerApp {
 
         ofFlow = new OFFlow();
         ofFlow.setSrcMac(deviceMac);
+        ofFlow.setDstIp("239.255.255.250");
         ofFlow.setDstPort("1900");
         ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
         ofFlow.setPriority(L2D_PRIORITY + 5);
@@ -948,6 +953,8 @@ public class MUDBasedIoTDeviceFlowBuilder implements ControllerApp {
                         reverseFlow.setSrcPort(ofFlow.getDstPort());
                         reverseFlow.setDstPort(ofFlow.getSrcPort());
                         reverseFlow.setPriority(G2D_DYNAMIC_FLOW_PRIORITY);
+                        reverseFlow.setPacketCount(ofFlow.getPacketCount());
+                        reverseFlow.setVolumeTransmitted(ofFlow.getVolumeTransmitted());
                         flowsTobeAdded.add(reverseFlow);
                     }
                 }
@@ -983,6 +990,8 @@ public class MUDBasedIoTDeviceFlowBuilder implements ControllerApp {
                         reverseFlow.setSrcPort(ofFlow.getDstPort());
                         reverseFlow.setDstPort(ofFlow.getSrcPort());
                         reverseFlow.setPriority(D2G_DYNAMIC_FLOW_PRIORITY);
+                        reverseFlow.setPacketCount(ofFlow.getPacketCount());
+                        reverseFlow.setVolumeTransmitted(ofFlow.getVolumeTransmitted());
                         flowsTobeAdded.add(reverseFlow);
                     }
                 }

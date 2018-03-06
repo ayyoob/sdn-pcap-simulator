@@ -54,6 +54,9 @@ public class IoTDeviceFlowBuilder implements ControllerApp {
         if (!enabled) {
             return;
         }
+        if (isIgnored(packet.getSrcMac()) || isIgnored(packet.getDstMac())) {
+            return;
+        }
         logPerformance(dpId,1);
         logMemoryUsage(dpId);
         String srcMac = packet.getSrcMac();
