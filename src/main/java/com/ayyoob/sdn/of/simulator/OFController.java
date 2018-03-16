@@ -80,6 +80,10 @@ public class OFController {
 
     }
 
+    public void removeApps() {
+        registeredApps.clear();
+    }
+
     public void printStats() {
         String stats = "";
         for (String dpId : packetTransmittionMap.keySet()) {

@@ -21,7 +21,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class IPV4Match {
+public class IPV6Match {
 
 	@JsonProperty("ietf-acldns:dst-dnsname")
 	private String dstDnsName;
@@ -31,10 +31,10 @@ public class IPV4Match {
 
 	private int protocol;
 
-	@JsonProperty("destination-ipv4-network")
+	@JsonProperty("destination-ipv6-network")
 	private String destinationIp;
 
-	@JsonProperty("source-ipv4-network")
+	@JsonProperty("source-ipv6-network")
 	private String sourceIp;
 
 	public String getDstDnsName() {

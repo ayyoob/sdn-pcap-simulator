@@ -5,15 +5,13 @@ import com.ayyoob.sdn.of.simulator.OFController;
 import com.ayyoob.sdn.of.simulator.OFFlow;
 import com.ayyoob.sdn.of.simulator.SimPacket;
 import com.ayyoob.sdn.of.simulator.apps.mudflowdto.DeviceFlowMap;
-import com.ayyoob.sdn.of.simulator.processor.mud.AccessControlListHolder;
-import com.ayyoob.sdn.of.simulator.processor.mud.Ace;
-import com.ayyoob.sdn.of.simulator.processor.mud.Match;
-import com.ayyoob.sdn.of.simulator.processor.mud.MudSpec;
+import com.ayyoob.sdn.of.simulator.processor.mud.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.json.simple.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,11 +24,14 @@ public class MUDFlowDeployer implements ControllerApp {
 	private static String dpId;
 	private static final int DNS_FLOW_PRIORITY = 1100;
 	private static final int D2G_FIXED_FLOW_PRIORITY = 850;
+	private static final int COMMON_EAPOL_FLOW_PRIORITY = 1200;
+
 	private static final int D2G_DYNAMIC_FLOW_PRIORITY = 810;
 	private static final int D2G_PRIORITY = 800;
 	private static final int G2D_FIXED_FLOW_PRIORITY = 750;
 	private static final int G2D_DYNAMIC_FLOW_PRIORITY = 710;
 	private static final int G2D_PRIORITY = 700;
+	private static final int GW_PRIORITY = 1050;
 	private static final int L2D_FIXED_FLOW_PRIORITY = 650;
 	private static final int L2D_DYNAMIC_FLOW_PRIORITY = 610;
 	private static final int L2D_PRIORITY = 600;
@@ -46,18 +47,43 @@ public class MUDFlowDeployer implements ControllerApp {
 			return;
 		}
 		deviceMac = (String) jsonObject.get("deviceMac");
+
+
 		gatewayIp = (String) jsonObject.get("gatewayIp");
 		dpId = (String) jsonObject.get("dpId");
+		String devices[] = ((String) jsonObject.get("devices")).split("\\|");
+		String mudPath = (String) jsonObject.get("mudPath");
 		ObjectMapper mapper = new ObjectMapper();
-		try {
-			MudSpec mudSpec = mapper.readValue(new File((String) jsonObject.get("mudPath")), MudSpec.class);
-			loadMudSpec(deviceMac, mudSpec);
-			installExternalNetworkRules(deviceMac);
-			installInternalNetworkRules(deviceMac);
+		for (String device : devices) {
+			String dmac = device.split(",")[0];
+			String path = mudPath + device.split(",")[1];
+			try {
+				MudSpec mudSpec = mapper.readValue(new File(path), MudSpec.class);
+				loadMudSpec(dmac, mudSpec);
+				installExternalNetworkRules(dmac);
+				installInternalNetworkRules(dmac);
 
-		} catch (IOException e) {
-			e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
+//		List<String> ips1 = new ArrayList<>();
+//		ips1.add("52.87.241.159");
+//		deviceFlowMapHolder.get(deviceMac).addDnsIps("oculus689-vir.dropcam.com", ips1);
+		
+		OFFlow ofFlow = new OFFlow();
+		ofFlow.setEthType(Constants.ETH_TYPE_EAPOL);
+		ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
+		ofFlow.setPriority(COMMON_EAPOL_FLOW_PRIORITY);
+		OFController.getInstance().addFlow(dpId, ofFlow);
+
+		ofFlow = new OFFlow();
+		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+		ofFlow.setDstMac(Constants.BROADCAST_MAC);
+		ofFlow.setDstPort(Constants.DHCP_PORT);
+		ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
+		ofFlow.setPriority(COMMON_EAPOL_FLOW_PRIORITY);
+		OFController.getInstance().addFlow(dpId, ofFlow);
 	}
 
 	@Override
@@ -88,7 +114,7 @@ public class MUDFlowDeployer implements ControllerApp {
 					OFController.getInstance().addFlow(dpId, ofFlow);
 					return;
 				}
-			} else if (dpId.equals(packet.getDstMac())) {
+			} else if (dpId.equals(packet.getDstMac()) || isMulticastorBroadcast(packet.getDstMac())) {
 				//D2G
 
 				String deviceMac = packet.getSrcMac();
@@ -121,50 +147,91 @@ public class MUDFlowDeployer implements ControllerApp {
 	}
 
 	private void loadMudSpec(String deviceMac, MudSpec mudSpec) {
-		String fromDevicePolicyName = mudSpec.getIetfMud().getFromDevicePolicy().getAccessList().getAccessDTOList().get(0).getName();
-		String toDevicePolicyName = mudSpec.getIetfMud().getToDevicePolicy().getAccessList().getAccessDTOList().get(0).getName();
+		List<String> fromDevicePolicyNames = new ArrayList<>();
+		List<String> toDevicePolicyNames = new ArrayList<>();
+		for (AccessDTO accessDTO : mudSpec.getIetfMud().getFromDevicePolicy().getAccessList().getAccessDTOList()) {
+			fromDevicePolicyNames.add(accessDTO.getName());
+		}
+
+		for (AccessDTO accessDTO : mudSpec.getIetfMud().getToDevicePolicy().getAccessList().getAccessDTOList()) {
+			toDevicePolicyNames.add(accessDTO.getName());
+		}
+
 		List<OFFlow> fromDeviceFlows = new ArrayList<>();
 		List<OFFlow> toDeviceFlows = new ArrayList<>();
 		for (AccessControlListHolder accessControlListHolder : mudSpec.getAccessControlList().getAccessControlListHolder()) {
-			if (accessControlListHolder.getName().equals(fromDevicePolicyName)) {
+			if (fromDevicePolicyNames.contains(accessControlListHolder.getName())) {
 				for (Ace ace : accessControlListHolder.getAces().getAceList()) {
 					Match match = ace.getMatches();
 
 					//filter local
-					if (match.getIetfMudMatch() != null && match.getIetfMudMatch().getController()==null) {
+					if (match.getIetfMudMatch() != null && match.getIetfMudMatch().getController()==null
+							&& match.getIetfMudMatch().getLocalNetworks() != null) {
+
 						//install local network related rules here
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(deviceMac);
-						if(match.getL3Match() != null && match.getL3Match().getIpv4Match() != null &&
-								match.getL3Match().getIpv4Match().getProtocol() != 0) {
-							ofFlow.setIpProto("" + match.getL3Match().getIpv4Match().getProtocol());
+						String etherType = match.getEthMatch() == null ? Constants.ETH_TYPE_IPV4 : match.getEthMatch()
+								.getEtherType();
+						ofFlow.setEthType(etherType);
+						if(match.getIpv4Match() != null &&
+								match.getIpv4Match().getProtocol() != 0) {
+
+							ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+							ofFlow.setIpProto("" + match.getIpv4Match().getProtocol());
+						}
+
+						if(match.getIpv6Match() != null) {
+							ofFlow.setEthType(Constants.ETH_TYPE_IPV6);
+							ofFlow.setIpProto("" + match.getIpv6Match().getProtocol());
+						}
+
+						if (match.getEthMatch() != null) {
+							if (match.getEthMatch().getEtherType() != null) {
+								ofFlow.setEthType(match.getEthMatch().getEtherType());
+							}
+							if (match.getEthMatch().getSrcMacAddress() != null) {
+								ofFlow.setSrcMac(match.getEthMatch().getSrcMacAddress());
+							}
+							if (match.getEthMatch().getDstMacAddress() != null) {
+								ofFlow.setDstMac(match.getEthMatch().getDstMacAddress());
+							}
+
 						}
 						//tcp
-						if(match.getL4Match() != null && match.getL4Match().getTcpMatch() != null &&
-								match.getL4Match().getTcpMatch().getDestinationPortMatch() != null
-								&& match.getL4Match().getTcpMatch().getDestinationPortMatch().getPort() != 0) {
-							ofFlow.setDstPort("" + match.getL4Match().getTcpMatch().getDestinationPortMatch().getPort());
+						if( match.getTcpMatch() != null &&
+								match.getTcpMatch().getDestinationPortMatch() != null
+								&& match.getTcpMatch().getDestinationPortMatch().getPort() != 0) {
+							ofFlow.setDstPort("" + match.getTcpMatch().getDestinationPortMatch().getPort());
 						}
 
-						if(match.getL4Match() != null && match.getL4Match().getTcpMatch() != null &&
-								match.getL4Match().getTcpMatch().getSourcePortMatch() != null
-								&& match.getL4Match().getTcpMatch().getSourcePortMatch().getPort() != 0) {
-							ofFlow.setSrcPort("" + match.getL4Match().getTcpMatch().getSourcePortMatch().getPort());
+						if(match != null && match.getTcpMatch() != null &&
+								match.getTcpMatch().getSourcePortMatch() != null
+								&& match.getTcpMatch().getSourcePortMatch().getPort() != 0) {
+							ofFlow.setSrcPort("" + match.getTcpMatch().getSourcePortMatch().getPort());
 						}
 						//udp
-						if(match.getL4Match() != null && match.getL4Match().getUdpMatch() != null &&
-								match.getL4Match().getUdpMatch().getDestinationPortMatch() != null
-								&& match.getL4Match().getUdpMatch().getDestinationPortMatch().getPort() != 0) {
-							ofFlow.setDstPort("" + match.getL4Match().getUdpMatch().getDestinationPortMatch().getPort());
+						if(match != null && match.getUdpMatch() != null &&
+								match.getUdpMatch().getDestinationPortMatch() != null
+								&& match.getUdpMatch().getDestinationPortMatch().getPort() != 0) {
+							ofFlow.setDstPort("" + match.getUdpMatch().getDestinationPortMatch().getPort());
 						}
 
-						if(match.getL4Match() != null && match.getL4Match().getUdpMatch() != null &&
-								match.getL4Match().getUdpMatch().getSourcePortMatch() != null
-								&& match.getL4Match().getUdpMatch().getSourcePortMatch().getPort() != 0) {
-							ofFlow.setSrcPort("" + match.getL4Match().getUdpMatch().getSourcePortMatch().getPort());
+						if(match != null && match.getUdpMatch() != null &&
+								match.getUdpMatch().getSourcePortMatch() != null
+								&& match.getUdpMatch().getSourcePortMatch().getPort() != 0) {
+							ofFlow.setSrcPort("" + match.getUdpMatch().getSourcePortMatch().getPort());
 						}
 
-						ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+						if ((match.getIpv4Match() != null && match.getIpv4Match().getDestinationIp() != null)) {
+							ofFlow.setDstIp(match.getIpv4Match().getDestinationIp().replace("/32", ""));
+						} else if (match.getIpv6Match() != null && match.getIpv6Match().getDestinationIp() != null) {
+							if (match.getIpv6Match().getDestinationIp().equals(Constants.LINK_LOCAL_MULTICAST_IP_RANGE)) {
+								ofFlow.setDstIp("*");
+							} else {
+								ofFlow.setDstIp(match.getIpv6Match().getDestinationIp().replace("/32", ""));
+							}
+						}
 						ofFlow.setPriority(L2D_FIXED_FLOW_PRIORITY);
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
 						OFController.getInstance().addFlow(dpId, ofFlow);
@@ -174,34 +241,45 @@ public class MUDFlowDeployer implements ControllerApp {
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(deviceMac);
 						ofFlow.setDstMac(dpId);
-						if(match.getL3Match() != null && match.getL3Match().getIpv4Match() != null &&
-								match.getL3Match().getIpv4Match().getProtocol() != 0) {
-							ofFlow.setIpProto("" + match.getL3Match().getIpv4Match().getProtocol());
-						}
-						//tcp
-						if(match.getL4Match() != null && match.getL4Match().getTcpMatch() != null &&
-								match.getL4Match().getTcpMatch().getDestinationPortMatch() != null
-								&& match.getL4Match().getTcpMatch().getDestinationPortMatch().getPort() != 0) {
-							ofFlow.setDstPort("" + match.getL4Match().getTcpMatch().getDestinationPortMatch().getPort());
+
+						String etherType = match.getEthMatch() == null ? Constants.ETH_TYPE_IPV4 : match.getEthMatch()
+								.getEtherType();
+						ofFlow.setEthType(etherType);
+						if(match.getIpv4Match() != null &&
+								match.getIpv4Match().getProtocol() != 0) {
+							ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+							ofFlow.setIpProto("" + match.getIpv4Match().getProtocol());
 						}
 
-						if(match.getL4Match() != null && match.getL4Match().getTcpMatch() != null &&
-								match.getL4Match().getTcpMatch().getSourcePortMatch() != null
-								&& match.getL4Match().getTcpMatch().getSourcePortMatch().getPort() != 0) {
-							ofFlow.setSrcPort("" + match.getL4Match().getTcpMatch().getSourcePortMatch().getPort());
+						if(match.getIpv6Match() != null) {
+							ofFlow.setEthType(Constants.ETH_TYPE_IPV6);
+							ofFlow.setIpProto("" + match.getIpv6Match().getProtocol());
+						}
+
+						//tcp
+						if(match != null && match.getTcpMatch() != null &&
+								match.getTcpMatch().getDestinationPortMatch() != null
+								&& match.getTcpMatch().getDestinationPortMatch().getPort() != 0) {
+							ofFlow.setDstPort("" + match.getTcpMatch().getDestinationPortMatch().getPort());
+						}
+
+						if(match != null && match.getTcpMatch() != null &&
+								match.getTcpMatch().getSourcePortMatch() != null
+								&& match.getTcpMatch().getSourcePortMatch().getPort() != 0) {
+							ofFlow.setSrcPort("" + match.getTcpMatch().getSourcePortMatch().getPort());
 						}
 						//udp
-						if(match.getL4Match() != null && match.getL4Match().getUdpMatch() != null &&
-								match.getL4Match().getUdpMatch().getDestinationPortMatch() != null
-								&& match.getL4Match().getUdpMatch().getDestinationPortMatch().getPort() != 0) {
-							ofFlow.setDstPort("" + match.getL4Match().getUdpMatch().getDestinationPortMatch().getPort());
+						if(match != null && match.getUdpMatch() != null &&
+								match.getUdpMatch().getDestinationPortMatch() != null
+								&& match.getUdpMatch().getDestinationPortMatch().getPort() != 0) {
+							ofFlow.setDstPort("" + match.getUdpMatch().getDestinationPortMatch().getPort());
 
 						}
 
-						if(match.getL4Match() != null && match.getL4Match().getUdpMatch() != null &&
-								match.getL4Match().getUdpMatch().getSourcePortMatch() != null
-								&& match.getL4Match().getUdpMatch().getSourcePortMatch().getPort() != 0) {
-							ofFlow.setSrcPort("" + match.getL4Match().getUdpMatch().getSourcePortMatch().getPort());
+						if(match != null && match.getUdpMatch() != null &&
+								match.getUdpMatch().getSourcePortMatch() != null
+								&& match.getUdpMatch().getSourcePortMatch().getPort() != 0) {
+							ofFlow.setSrcPort("" + match.getUdpMatch().getSourcePortMatch().getPort());
 							if (ofFlow.getSrcPort().equals(Constants.DNS_PORT)) {
 								isDnsReply = true;
 							}
@@ -211,18 +289,25 @@ public class MUDFlowDeployer implements ControllerApp {
 							match.getIetfMudMatch().getController().equals(DEFAULTGATEWAYCONTROLLER)) {
 							ofFlow.setDstIp(gatewayIp);
 							ofFlow.setPriority(D2G_DYNAMIC_FLOW_PRIORITY);
-						} else if(match.getL3Match() != null && match.getL3Match().getIpv4Match() != null &&
-								match.getL3Match().getIpv4Match().getDestinationIp() != null) {
-							ofFlow.setDstIp(match.getL3Match().getIpv4Match().getDestinationIp().replace("/32", ""));
+						} else if(match != null && match.getIpv4Match() != null &&
+								match.getIpv4Match().getDestinationIp() != null) {
+							ofFlow.setDstIp(match.getIpv4Match().getDestinationIp().replace("/32", ""));
 							ofFlow.setPriority(D2G_DYNAMIC_FLOW_PRIORITY);
-						} else if(match.getL3Match() != null && match.getL3Match().getIpv4Match() != null &&
-								match.getL3Match().getIpv4Match().getDstDnsName() != null) {
-							ofFlow.setDstIp(match.getL3Match().getIpv4Match().getDstDnsName());
+						} else if(match != null && match.getIpv4Match() != null &&
+								match.getIpv4Match().getDstDnsName() != null) {
+							ofFlow.setDstIp(match.getIpv4Match().getDstDnsName());
+							ofFlow.setPriority(D2G_DYNAMIC_FLOW_PRIORITY);
+						} else if(match != null && match.getIpv6Match() != null &&
+								match.getIpv6Match().getDestinationIp() != null) {
+							ofFlow.setDstIp(match.getIpv6Match().getDestinationIp().replace("/32", ""));
+							ofFlow.setPriority(D2G_DYNAMIC_FLOW_PRIORITY);
+						} else if(match != null && match.getIpv6Match() != null &&
+								match.getIpv6Match().getDstDnsName() != null) {
+							ofFlow.setDstIp(match.getIpv6Match().getDstDnsName());
 							ofFlow.setPriority(D2G_DYNAMIC_FLOW_PRIORITY);
 						} else {
 							ofFlow.setPriority(D2G_DYNAMIC_FLOW_PRIORITY);
 						}
-						ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
 						if (!isDnsReply) {
 							if (D2G_DYNAMIC_FLOW_PRIORITY == ofFlow.getPriority()) {
@@ -234,46 +319,52 @@ public class MUDFlowDeployer implements ControllerApp {
 
 					}
 				}
-			} else if (accessControlListHolder.getName().equals(toDevicePolicyName)) {
+			} else if (toDevicePolicyNames.contains(accessControlListHolder.getName())) {
 
 				for (Ace ace : accessControlListHolder.getAces().getAceList()) {
 					Match match = ace.getMatches();
 
 					//filter local
-					if (match.getIetfMudMatch() != null && match.getIetfMudMatch().getController()==null) {
+					if (match.getIetfMudMatch() != null && match.getIetfMudMatch().getController()==null
+							&& match.getIetfMudMatch().getLocalNetworks() != null) {
 						//install local network related rules here
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setDstMac(deviceMac);
-						if(match.getL3Match() != null && match.getL3Match().getIpv4Match() != null &&
-								match.getL3Match().getIpv4Match().getProtocol() != 0) {
-							ofFlow.setIpProto("" + match.getL3Match().getIpv4Match().getProtocol());
+						if(match != null && match.getIpv4Match() != null &&
+								match.getIpv4Match().getProtocol() != 0) {
+							ofFlow.setIpProto("" + match.getIpv4Match().getProtocol());
+							ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+						}
+
+						if(match.getIpv6Match() != null) {
+							ofFlow.setEthType(Constants.ETH_TYPE_IPV6);
+							ofFlow.setIpProto("" + match.getIpv6Match().getProtocol());
 						}
 
 						//tcp
-						if(match.getL4Match() != null && match.getL4Match().getTcpMatch() != null &&
-								match.getL4Match().getTcpMatch().getDestinationPortMatch() != null
-								&& match.getL4Match().getTcpMatch().getDestinationPortMatch().getPort() != 0) {
-							ofFlow.setDstPort("" + match.getL4Match().getTcpMatch().getDestinationPortMatch().getPort());
+						if(match != null && match.getTcpMatch() != null &&
+								match.getTcpMatch().getDestinationPortMatch() != null
+								&& match.getTcpMatch().getDestinationPortMatch().getPort() != 0) {
+							ofFlow.setDstPort("" + match.getTcpMatch().getDestinationPortMatch().getPort());
 						}
 
-						if(match.getL4Match() != null && match.getL4Match().getTcpMatch() != null &&
-								match.getL4Match().getTcpMatch().getSourcePortMatch() != null
-								&& match.getL4Match().getTcpMatch().getSourcePortMatch().getPort() != 0) {
-							ofFlow.setSrcPort("" + match.getL4Match().getTcpMatch().getSourcePortMatch().getPort());
+						if(match != null && match.getTcpMatch() != null &&
+								match.getTcpMatch().getSourcePortMatch() != null
+								&& match.getTcpMatch().getSourcePortMatch().getPort() != 0) {
+							ofFlow.setSrcPort("" + match.getTcpMatch().getSourcePortMatch().getPort());
 						}
 						//udp
-						if(match.getL4Match() != null && match.getL4Match().getUdpMatch() != null &&
-								match.getL4Match().getUdpMatch().getDestinationPortMatch() != null
-								&& match.getL4Match().getUdpMatch().getDestinationPortMatch().getPort() != 0) {
-							ofFlow.setDstPort("" + match.getL4Match().getUdpMatch().getDestinationPortMatch().getPort());
+						if(match != null && match.getUdpMatch() != null &&
+								match.getUdpMatch().getDestinationPortMatch() != null
+								&& match.getUdpMatch().getDestinationPortMatch().getPort() != 0) {
+							ofFlow.setDstPort("" + match.getUdpMatch().getDestinationPortMatch().getPort());
 						}
 
-						if(match.getL4Match() != null && match.getL4Match().getUdpMatch() != null &&
-								match.getL4Match().getUdpMatch().getSourcePortMatch() != null
-								&& match.getL4Match().getUdpMatch().getSourcePortMatch().getPort() != 0) {
-							ofFlow.setSrcPort("" + match.getL4Match().getUdpMatch().getSourcePortMatch().getPort());
+						if(match != null && match.getUdpMatch() != null &&
+								match.getUdpMatch().getSourcePortMatch() != null
+								&& match.getUdpMatch().getSourcePortMatch().getPort() != 0) {
+							ofFlow.setSrcPort("" + match.getUdpMatch().getSourcePortMatch().getPort());
 						}
-						ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
 						ofFlow.setPriority(L2D_FIXED_FLOW_PRIORITY);
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
 						OFController.getInstance().addFlow(dpId, ofFlow);
@@ -281,51 +372,70 @@ public class MUDFlowDeployer implements ControllerApp {
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(dpId);
 						ofFlow.setDstMac(deviceMac);
-						if(match.getL3Match() != null && match.getL3Match().getIpv4Match() != null &&
-								match.getL3Match().getIpv4Match().getProtocol() != 0) {
-							ofFlow.setIpProto("" + match.getL3Match().getIpv4Match().getProtocol());
-						}
-						//tcp
-						if(match.getL4Match() != null && match.getL4Match().getTcpMatch() != null &&
-								match.getL4Match().getTcpMatch().getDestinationPortMatch() != null
-								&& match.getL4Match().getTcpMatch().getDestinationPortMatch().getPort() != 0) {
-							ofFlow.setDstPort("" + match.getL4Match().getTcpMatch().getDestinationPortMatch().getPort());
+						String etherType = match.getEthMatch() == null ? Constants.ETH_TYPE_IPV4 : match.getEthMatch()
+								.getEtherType();
+						ofFlow.setEthType(etherType);
+						if(match.getIpv4Match() != null &&
+								match.getIpv4Match().getProtocol() != 0) {
+
+							ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+							ofFlow.setIpProto("" + match.getIpv4Match().getProtocol());
 						}
 
-						if(match.getL4Match() != null && match.getL4Match().getTcpMatch() != null &&
-								match.getL4Match().getTcpMatch().getSourcePortMatch() != null
-								&& match.getL4Match().getTcpMatch().getSourcePortMatch().getPort() != 0) {
-							ofFlow.setSrcPort("" + match.getL4Match().getTcpMatch().getSourcePortMatch().getPort());
+						if(match.getIpv6Match() != null) {
+							ofFlow.setEthType(Constants.ETH_TYPE_IPV6);
+							ofFlow.setIpProto("" + match.getIpv6Match().getProtocol());
+						}
+
+						//tcp
+						if(match != null && match.getTcpMatch() != null &&
+								match.getTcpMatch().getDestinationPortMatch() != null
+								&& match.getTcpMatch().getDestinationPortMatch().getPort() != 0) {
+							ofFlow.setDstPort("" + match.getTcpMatch().getDestinationPortMatch().getPort());
+						}
+
+						if(match != null && match.getTcpMatch() != null &&
+								match.getTcpMatch().getSourcePortMatch() != null
+								&& match.getTcpMatch().getSourcePortMatch().getPort() != 0) {
+							ofFlow.setSrcPort("" + match.getTcpMatch().getSourcePortMatch().getPort());
 						}
 						//udp
-						if(match.getL4Match() != null && match.getL4Match().getUdpMatch() != null &&
-								match.getL4Match().getUdpMatch().getDestinationPortMatch() != null
-								&& match.getL4Match().getUdpMatch().getDestinationPortMatch().getPort() != 0) {
-							ofFlow.setDstPort("" + match.getL4Match().getUdpMatch().getDestinationPortMatch().getPort());
+						if(match != null && match.getUdpMatch() != null &&
+								match.getUdpMatch().getDestinationPortMatch() != null
+								&& match.getUdpMatch().getDestinationPortMatch().getPort() != 0) {
+							ofFlow.setDstPort("" + match.getUdpMatch().getDestinationPortMatch().getPort());
 						}
 
-						if(match.getL4Match() != null && match.getL4Match().getUdpMatch() != null &&
-								match.getL4Match().getUdpMatch().getSourcePortMatch() != null
-								&& match.getL4Match().getUdpMatch().getSourcePortMatch().getPort() != 0) {
-							ofFlow.setSrcPort("" + match.getL4Match().getUdpMatch().getSourcePortMatch().getPort());
+						if(match != null && match.getUdpMatch() != null &&
+								match.getUdpMatch().getSourcePortMatch() != null
+								&& match.getUdpMatch().getSourcePortMatch().getPort() != 0) {
+							ofFlow.setSrcPort("" + match.getUdpMatch().getSourcePortMatch().getPort());
 						}
 
 						if(match.getIetfMudMatch() != null && match.getIetfMudMatch().getController()!=null &&
 								match.getIetfMudMatch().getController().equals(DEFAULTGATEWAYCONTROLLER)) {
 							ofFlow.setSrcIp(gatewayIp);
 							ofFlow.setPriority(G2D_DYNAMIC_FLOW_PRIORITY);
-						} else if(match.getL3Match() != null && match.getL3Match().getIpv4Match() != null &&
-								match.getL3Match().getIpv4Match().getSourceIp() != null) {
-							ofFlow.setSrcIp(match.getL3Match().getIpv4Match().getSourceIp().replace("/32", ""));
+						} else if(match != null && match.getIpv4Match() != null &&
+								match.getIpv4Match().getSourceIp() != null) {
+							ofFlow.setSrcIp(match.getIpv4Match().getSourceIp().replace("/32", ""));
 							ofFlow.setPriority(G2D_DYNAMIC_FLOW_PRIORITY);
-						} else if(match.getL3Match() != null && match.getL3Match().getIpv4Match() != null &&
-								match.getL3Match().getIpv4Match().getSrcDnsName() != null) {
-							ofFlow.setSrcIp(match.getL3Match().getIpv4Match().getSrcDnsName());
+						} else if(match != null && match.getIpv4Match() != null &&
+								match.getIpv4Match().getSrcDnsName() != null) {
+							ofFlow.setSrcIp(match.getIpv4Match().getSrcDnsName());
+							ofFlow.setPriority(G2D_DYNAMIC_FLOW_PRIORITY);
+						} else if(match != null && match.getIpv6Match() != null &&
+								match.getIpv6Match().getSourceIp() != null) {
+							ofFlow.setSrcIp(match.getIpv6Match().getSourceIp().replace("/32", ""));
+							ofFlow.setPriority(G2D_DYNAMIC_FLOW_PRIORITY);
+						} else if(match != null && match.getIpv6Match() != null &&
+								match.getIpv6Match().getSrcDnsName() != null) {
+							ofFlow.setSrcIp(match.getIpv6Match().getSrcDnsName());
 							ofFlow.setPriority(G2D_DYNAMIC_FLOW_PRIORITY);
 						} else {
 							ofFlow.setPriority(G2D_DYNAMIC_FLOW_PRIORITY);
 						}
-						ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
 						if (G2D_DYNAMIC_FLOW_PRIORITY == ofFlow.getPriority()) {
 							toDeviceFlows.add(ofFlow);
@@ -424,12 +534,62 @@ public class MUDFlowDeployer implements ControllerApp {
 		ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
 		OFController.getInstance().addFlow(dpId, ofFlow);
 
+		//Gateway communication
+		ofFlow = new OFFlow();
+		ofFlow.setSrcMac(dpId);
+		ofFlow.setDstMac(deviceMac);
+		ofFlow.setSrcIp(gatewayIp);
+		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+		ofFlow.setPriority(GW_PRIORITY);
+		ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
+		OFController.getInstance().addFlow(dpId, ofFlow);
+
+		ofFlow = new OFFlow();
+		ofFlow.setSrcMac(deviceMac);
+		ofFlow.setDstMac(dpId);
+		ofFlow.setDstIp(gatewayIp);
+		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+		ofFlow.setPriority(GW_PRIORITY);
+		ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
+		OFController.getInstance().addFlow(dpId, ofFlow);
+
+		ofFlow = new OFFlow();
+		ofFlow.setSrcMac(dpId);
+		ofFlow.setDstMac(deviceMac);
+		ofFlow.setSrcIp("fe80:0:0:0:16cc:20ff:fe51:33ea");
+		ofFlow.setEthType(Constants.ETH_TYPE_IPV6);
+		ofFlow.setPriority(GW_PRIORITY);
+		ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
+		OFController.getInstance().addFlow(dpId, ofFlow);
+
+		ofFlow = new OFFlow();
+		ofFlow.setSrcMac(deviceMac);
+		ofFlow.setDstMac(dpId);
+		ofFlow.setDstIp("fe80:0:0:0:16cc:20ff:fe51:33ea");
+		ofFlow.setEthType(Constants.ETH_TYPE_IPV6);
+		ofFlow.setPriority(GW_PRIORITY);
+		ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
+		OFController.getInstance().addFlow(dpId, ofFlow);
+
+
+
+
+		ofFlow = new OFFlow();
+		ofFlow.setSrcMac(dpId);
+		ofFlow.setDstMac(deviceMac);
+		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+		ofFlow.setIpProto(Constants.ICMP_PROTO);
+		ofFlow.setPriority(G2D_DYNAMIC_FLOW_PRIORITY);
+		ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
+		OFController.getInstance().addFlow(dpId, ofFlow);
+
+
 		ofFlow = new OFFlow();
 		ofFlow.setSrcMac(dpId);
 		ofFlow.setDstMac(deviceMac);
 		ofFlow.setIpProto(Constants.UDP_PROTO);
 		ofFlow.setSrcPort(Constants.DNS_PORT);
-		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
+		//ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
 		ofFlow.setPriority(DNS_FLOW_PRIORITY);
 		ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
 		OFController.getInstance().addFlow(dpId, ofFlow);
@@ -520,5 +680,16 @@ public class MUDFlowDeployer implements ControllerApp {
 			}
 		}
 		return null;
+	}
+
+	private boolean isMulticastorBroadcast(String mac) {
+		if (mac.length() == Constants.BROADCAST_MAC.length()) {
+			String mostSignificantByte = mac.split(":")[0];
+			String binary = new BigInteger(mostSignificantByte, 16).toString(2);
+			if (mac.equals(Constants.BROADCAST_MAC) || binary.charAt(binary.length() -1) == '1') {
+				return true;
+			}
+		}
+		return false;
 	}
 }

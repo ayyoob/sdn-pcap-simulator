@@ -1,7 +1,5 @@
 package com.ayyoob.sdn.of.simulator.processor.mud;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 public class AccessControlListHolder {
 
 	private String name;

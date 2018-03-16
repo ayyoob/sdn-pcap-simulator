@@ -17,20 +17,42 @@
  */
 package com.ayyoob.sdn.of.simulator.processor.mud;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.List;
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class EthMatch {
 
-public class IetfAccessControlListHolder {
+	@JsonProperty("destination-mac-address")
+	private String dstMacAddress;
 
-	@JsonProperty("acl")
-	private List<AccessControlListHolder> accessControlListHolder;
+	@JsonProperty("source-mac-address")
+	private String srcMacAddress;
 
-	public List<AccessControlListHolder> getAccessControlListHolder() {
-		return accessControlListHolder;
+	@JsonProperty("ethertype")
+	private String etherType;
+
+	public String getDstMacAddress() {
+		return dstMacAddress;
 	}
 
-	public void setAccessControlListHolder(List<AccessControlListHolder> accessControlListHolder) {
-		this.accessControlListHolder = accessControlListHolder;
+	public void setDstMacAddress(String dstMacAddress) {
+		this.dstMacAddress = dstMacAddress;
+	}
+
+	public String getSrcMacAddress() {
+		return srcMacAddress;
+	}
+
+	public void setSrcMacAddress(String srcMacAddress) {
+		this.srcMacAddress = srcMacAddress;
+	}
+
+	public String getEtherType() {
+		return etherType;
+	}
+
+	public void setEtherType(String etherType) {
+		this.etherType = etherType;
 	}
 }

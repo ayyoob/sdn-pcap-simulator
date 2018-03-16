@@ -74,7 +74,7 @@ public class MudBasedSingleSwitchStatsCollector implements StatListener {
         if (currentTime >= nextLogTime) {
             lastLogTime = currentTime;
             data.add(currentTime + "," + getVolumeData());
-            flowCounterdata.add(currentTime + "," + OFController.getInstance().getAllFlows(dpId).size());
+            flowCounterdata.add(currentTime + "," + getDeviceFlowsSize());
         }
 
         if (data.size() > 10000) {
@@ -89,6 +89,18 @@ public class MudBasedSingleSwitchStatsCollector implements StatListener {
         }
     }
 
+    private int getDeviceFlowsSize() {
+        int flowCount = 0;
+        for (OFFlow ofFlow : OFController.getInstance().getAllFlows(dpId)) {
+            if (!ofFlow.getSrcMac().equals(deviceMac) && !ofFlow.getDstMac().equals(deviceMac)) {
+                continue;
+            }
+            flowCount++;
+        }
+        return flowCount;
+
+    }
+
     private String getVolumeData() {
         boolean first = true;
         StringBuilder volumeData = new StringBuilder();
@@ -98,6 +110,9 @@ public class MudBasedSingleSwitchStatsCollector implements StatListener {
         int indexC = 0;
         List<Long> currentFlowCountData = new ArrayList<>();
         for (OFFlow ofFlow : flowStats) {
+            if (!ofFlow.getSrcMac().equals(deviceMac) && !ofFlow.getDstMac().equals(deviceMac)) {
+                continue;
+            }
             if (ofFlow.getPriority() == DNS_FLOW_PRIORITY || ofFlow.getPriority() == D2G_FIXED_FLOW_PRIORITY || ofFlow.getPriority() == G2D_FIXED_FLOW_PRIORITY||
                     ofFlow.getPriority() == L2D_FIXED_FLOW_PRIORITY || ofFlow.getPriority() == L2D_PRIORITY||
                     ofFlow.getPriority() == L2D_PRIORITY +20 ||

@@ -24,8 +24,6 @@ public class OFSwitch {
         for (StatListener statListener : OFController.getInstance().getStatListeners()) {
             statListener.process(dpid, packet);
         }
-
-
         OFFlow flow = getMatchingFlow(packet);
         if (flow.getOfAction() == OFFlow.OFAction.MIRROR_TO_CONTROLLER) {
             flow = getMatchingFlow(packet);
@@ -135,6 +133,8 @@ public class OFSwitch {
     public void clearAllFlows() {
         ofFlows = new LinkedList<OFFlow>();
         ofFlows.add(getDefaultFlow());
+        currentTime = 0;
+        lastPacketTime = 0;
     }
 
     private OFFlow getMatchingFlow(SimPacket packet) {

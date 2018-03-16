@@ -18,6 +18,10 @@ public class SimPacket {
     private byte[] data;
     private String dnsQname;
     private Flag tcpFlag;
+    private String icmpType;
+    private String icmpCode;
+    private boolean inspected;
+
 
     public enum Flag {
         SYN,
@@ -155,13 +159,37 @@ public class SimPacket {
     }
 
     public void print() {
-        System.out.println("size, srcMac, dstMac, ethType, srcIp, dstIp, ipProto, srcPort, dstPort,timestamp");
+        System.out.println("size, srcMac, dstMac, ethType, srcIp, dstIp, ipProto, srcPort, dstPort,icmpCode,icmpType,timestamp");
         System.out.println(size + "," + srcMac + "," + dstMac + "," + ethType + "," + srcIp + "," + dstIp
-                + "," + ipProto + "," + srcPort + "," + dstPort + "," + timestamp);
+                + "," + ipProto + "," + srcPort + "," + dstPort + "," + icmpCode + "," + icmpType + "," + timestamp);
     }
 
     public String getPacketInfo() {
         return size + "," + srcMac + "," + dstMac + "," + ethType + "," + srcIp + "," + dstIp
-                + "," + ipProto + "," + srcPort + "," + dstPort + "," + timestamp;
+                + "," + ipProto + "," + srcPort + "," + dstPort + "," + icmpCode + "," + icmpType + "," + timestamp;
+    }
+
+    public String getIcmpType() {
+        return icmpType;
+    }
+
+    public void setIcmpType(String icmpType) {
+        this.icmpType = icmpType;
+    }
+
+    public String getIcmpCode() {
+        return icmpCode;
+    }
+
+    public void setIcmpCode(String icmpCode) {
+        this.icmpCode = icmpCode;
+    }
+
+    public boolean isInspected() {
+        return inspected;
+    }
+
+    public void setInspected(boolean inspected) {
+        this.inspected = inspected;
     }
 }

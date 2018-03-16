@@ -15,18 +15,33 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package com.ayyoob.sdn.of.simulator.processor.mud;
 
-public class AccessDTO {
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
-	private String name;
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class IcmpMatch {
 
-	public String getName() {
-		return name;
+	@JsonProperty("type")
+	private int type;
+
+	@JsonProperty("code")
+	private int code;
+
+	public int getType() {
+		return type;
 	}
 
-	public void setName(String name) {
-		this.name = name;
+	public void setType(int type) {
+		this.type = type;
+	}
+
+	public int getCode() {
+		return code;
+	}
+
+	public void setCode(int code) {
+		this.code = code;
 	}
 }
