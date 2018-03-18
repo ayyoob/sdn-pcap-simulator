@@ -5,10 +5,7 @@ import com.ayyoob.sdn.of.simulator.apps.StatListener;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
-import org.pcap4j.core.NotOpenException;
-import org.pcap4j.core.PcapHandle;
-import org.pcap4j.core.PcapNativeException;
-import org.pcap4j.core.Pcaps;
+import org.pcap4j.core.*;
 import org.pcap4j.packet.*;
 import org.pcap4j.packet.namednumber.EtherType;
 import org.pcap4j.packet.namednumber.IpNumber;
@@ -37,6 +34,15 @@ public class Simulator {
         JSONObject jsonObject = (JSONObject) obj;
 
         String pcapLocation = (String) jsonObject.get("pcapLocation");
+        boolean inspectFileWrite = (boolean) jsonObject.get("inspectFileWrite");
+        String inspectPcapFileName = (String) jsonObject.get("inspectFileName");
+        String currentPath = Paths.get(".").toAbsolutePath().normalize().toString();
+
+        File workingDirectory = new File(currentPath + File.separator + "result");
+        if (!workingDirectory.exists()) {
+            workingDirectory.mkdir();
+        }
+        inspectPcapFileName = currentPath + File.separator + "result" + File.separator + inspectPcapFileName;
         JSONObject switchConfig = (JSONObject) jsonObject.get("switchConfig");
         String dpId = (String) switchConfig.get("dpId");
         String macAddress = (String) switchConfig.get("macAddress");
@@ -75,23 +81,28 @@ public class Simulator {
             OFController.getInstance().registerStatListeners(statListener, arg);
         }
 
-        processPcap(pcapLocation, ofSwitch);
+        processPcap(pcapLocation, ofSwitch, inspectFileWrite, inspectPcapFileName);
         OFController.getInstance().complete();
         OFController.getInstance().printStats();
     }
 
-    private static void processPcap(String pcapLocation, OFSwitch ofSwitch) throws PcapNativeException {
+    private static void processPcap(String pcapLocation, OFSwitch ofSwitch, boolean inspectFileWrite, String inspectPcapFileName
+                                    ) throws PcapNativeException, NotOpenException {
         boolean firstPacket = false;
         long startTimestamp = 0;
         long endTimestamp= 0;
         long totalPacketCount=0;
         long sumPacketProcessingTime=0;
+        PcapDumper dumper = null;
 
         PcapHandle handle;
         try {
             handle = Pcaps.openOffline(pcapLocation, PcapHandle.TimestampPrecision.NANO);
         } catch (PcapNativeException e) {
             handle = Pcaps.openOffline(pcapLocation);
+        }
+        if (inspectFileWrite) {
+            dumper = handle.dumpOpen(inspectPcapFileName);
         }
         try {
             int i =0;
@@ -215,6 +226,9 @@ public class Simulator {
                     }
                     long startTime = System.currentTimeMillis();
                     ofSwitch.transmit(simPacket);
+                    if (inspectFileWrite && simPacket.isInspected()) {
+                        dumper.dump(packet);
+                    }
                     long endTime = System.currentTimeMillis();
                     sumPacketProcessingTime = sumPacketProcessingTime + (endTime-startTime);
                 } catch (ClassCastException e) {
