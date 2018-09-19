@@ -3,6 +3,7 @@ package com.ayyoob.sdn.of.simulator;
 import java.io.Serializable;
 
 public class OFFlow implements Serializable{
+    private String name;
     private String srcMac="*";
     private String dstMac="*";
     private String ethType="*";
@@ -143,11 +144,18 @@ public class OFFlow implements Serializable{
 
     @Override
     public int hashCode() {
-        int result = this.srcMac.hashCode();
-        result = 31 * result + ("@" + this.dstMac + "@" + this.ethType + "@" + this.vlanId
-                + "@" + this.srcIp + "@" + this.dstIp + "@" + this.ipProto + "@" + this.srcPort + "@" + this.dstPort
-                + "@" + this.icmpType+ "@" + this.icmpCode).hashCode();
-
+        int result = srcMac.hashCode();
+        result = 31 * result + dstMac.hashCode();
+        result = 31 * result + ethType.hashCode();
+        result = 31 * result + vlanId.hashCode();
+        result = 31 * result + srcIp.hashCode();
+        result = 31 * result + dstIp.hashCode();
+        result = 31 * result + ipProto.hashCode();
+        result = 31 * result + srcPort.hashCode();
+        result = 31 * result + dstPort.hashCode();
+        result = 31 * result + icmpType.hashCode();
+        result = 31 * result + icmpCode.hashCode();
+        result = 31 * result + priority;
         return result;
     }
 
@@ -172,7 +180,8 @@ public class OFFlow implements Serializable{
                 this.srcPort.equals(flow.getSrcPort()) &&
                 this.icmpType.equals(flow.getIcmpType()) &&
                 this.icmpCode.equals(flow.getIcmpCode()) &&
-                this.dstPort.equals(flow.getDstPort());
+                this.dstPort.equals(flow.getDstPort()) &&
+                this.priority == flow.getPriority();
 
     }
 
@@ -214,6 +223,14 @@ public class OFFlow implements Serializable{
 
     public void setIcmpCode(String icmpCode) {
         this.icmpCode = icmpCode;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     public String getFlowHeaderString() {

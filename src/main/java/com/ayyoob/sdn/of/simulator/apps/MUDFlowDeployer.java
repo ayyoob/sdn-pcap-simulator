@@ -37,6 +37,8 @@ public class MUDFlowDeployer implements ControllerApp {
 	private static final int L2D_PRIORITY = 600;
 	private static long idleTimeout = 120000;
 	private static final String DEFAULTGATEWAYCONTROLLER = "urn:ietf:params:mud:gateway";
+	private static final String DEFAULT_DNS_CONTROLLER = "urn:ietf:params:mud:dns";
+	private static final String DEFAULT_NTP_CONTROLLER = "urn:ietf:params:mud:ntp";
 	Map<String, DeviceFlowMap> deviceFlowMapHolder = new HashMap<>();
 
 	@Override
@@ -67,10 +69,21 @@ public class MUDFlowDeployer implements ControllerApp {
 				e.printStackTrace();
 			}
 		}
-//		List<String> ips1 = new ArrayList<>();
-//		ips1.add("52.87.241.159");
-//		deviceFlowMapHolder.get(deviceMac).addDnsIps("oculus689-vir.dropcam.com", ips1);
-		
+		List<String> ips1 = new ArrayList<>();
+		ips1.add("54.196.197.46");
+		ips1.add("54.81.152.49");
+		ips1.add("54.87.58.52");
+		ips1.add("54.198.33.220");
+		ips1.add("54.162.197.42");
+		ips1.add("54.198.241.119");
+		ips1.add("174.129.217.97");
+		deviceFlowMapHolder.get(deviceMac).addDnsIps("tunnel.xbcs.net", ips1);
+
+		List<String> ips2 = new ArrayList<>();
+		ips2.add("52.52.47.66");
+		ips2.add("52.9.13.36");
+		deviceFlowMapHolder.get(deviceMac).addDnsIps("xmpp.samsungsmartcam.com", ips2);
+
 		OFFlow ofFlow = new OFFlow();
 		ofFlow.setEthType(Constants.ETH_TYPE_EAPOL);
 		ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
@@ -286,7 +299,9 @@ public class MUDFlowDeployer implements ControllerApp {
 						}
 
 						if(match.getIetfMudMatch() != null && match.getIetfMudMatch().getController()!=null &&
-							match.getIetfMudMatch().getController().equals(DEFAULTGATEWAYCONTROLLER)) {
+								(match.getIetfMudMatch().getController().equals(DEFAULTGATEWAYCONTROLLER)
+										|| match.getIetfMudMatch().getController().equals(DEFAULT_DNS_CONTROLLER)
+										|| match.getIetfMudMatch().getController().equals(DEFAULT_NTP_CONTROLLER))) {
 							ofFlow.setDstIp(gatewayIp);
 							ofFlow.setPriority(D2G_DYNAMIC_FLOW_PRIORITY);
 						} else if(match != null && match.getIpv4Match() != null &&
@@ -413,7 +428,9 @@ public class MUDFlowDeployer implements ControllerApp {
 						}
 
 						if(match.getIetfMudMatch() != null && match.getIetfMudMatch().getController()!=null &&
-								match.getIetfMudMatch().getController().equals(DEFAULTGATEWAYCONTROLLER)) {
+								(match.getIetfMudMatch().getController().equals(DEFAULTGATEWAYCONTROLLER)
+										|| match.getIetfMudMatch().getController().equals(DEFAULT_DNS_CONTROLLER)
+										|| match.getIetfMudMatch().getController().equals(DEFAULT_NTP_CONTROLLER))) {
 							ofFlow.setSrcIp(gatewayIp);
 							ofFlow.setPriority(G2D_DYNAMIC_FLOW_PRIORITY);
 						} else if(match != null && match.getIpv4Match() != null &&
@@ -474,7 +491,7 @@ public class MUDFlowDeployer implements ControllerApp {
 		ofFlow.setDstMac(deviceMac);
 		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
 		ofFlow.setPriority(L2D_PRIORITY);
-		ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
+		ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
 		OFController.getInstance().addFlow(dpId, ofFlow);
 
 //		OFFlow ofFlow = new OFFlow();
@@ -593,63 +610,6 @@ public class MUDFlowDeployer implements ControllerApp {
 		ofFlow.setPriority(DNS_FLOW_PRIORITY);
 		ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
 		OFController.getInstance().addFlow(dpId, ofFlow);
-
-
-//		OFFlow ofFlow = new OFFlow();
-//		ofFlow.setSrcMac(dpId);
-//		ofFlow.setDstMac(deviceMac);
-//		ofFlow.setIpProto(Constants.TCP_PROTO);
-//		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
-//		ofFlow.setPriority(G2D_PRIORITY);
-//		ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
-//		OFController.getInstance().addFlow(dpId, ofFlow);
-//
-//		ofFlow = new OFFlow();
-//		ofFlow.setSrcMac(dpId);
-//		ofFlow.setDstMac(deviceMac);
-//		ofFlow.setIpProto(Constants.UDP_PROTO);
-//		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
-//		ofFlow.setPriority(G2D_PRIORITY);
-//		ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
-//		OFController.getInstance().addFlow(dpId, ofFlow);
-//
-//		ofFlow = new OFFlow();
-//		ofFlow.setSrcMac(dpId);
-//		ofFlow.setDstMac(deviceMac);
-//		ofFlow.setIpProto(Constants.ICMP_PROTO);
-//		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
-//		ofFlow.setPriority(G2D_PRIORITY);
-//		ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
-//		OFController.getInstance().addFlow(dpId, ofFlow);
-//
-//
-//		ofFlow = new OFFlow();
-//		ofFlow.setSrcMac(deviceMac);
-//		ofFlow.setDstMac(dpId);
-//		ofFlow.setIpProto(Constants.ICMP_PROTO);
-//		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
-//		ofFlow.setPriority(D2G_PRIORITY);
-//		ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
-//		OFController.getInstance().addFlow(dpId, ofFlow);
-//
-//
-//		ofFlow = new OFFlow();
-//		ofFlow.setSrcMac(deviceMac);
-//		ofFlow.setDstMac(dpId);
-//		ofFlow.setIpProto(Constants.TCP_PROTO);
-//		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
-//		ofFlow.setPriority(D2G_PRIORITY);
-//		ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
-//		OFController.getInstance().addFlow(dpId, ofFlow);
-//
-//		ofFlow = new OFFlow();
-//		ofFlow.setSrcMac(deviceMac);
-//		ofFlow.setDstMac(dpId);
-//		ofFlow.setIpProto(Constants.UDP_PROTO);
-//		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
-//		ofFlow.setPriority(D2G_PRIORITY);
-//		ofFlow.setOfAction(OFFlow.OFAction.MIRROR_TO_CONTROLLER);
-//		OFController.getInstance().addFlow(dpId, ofFlow);
 	}
 
 	private OFFlow getMatchingFlow(SimPacket packet, List<OFFlow> ofFlows) {

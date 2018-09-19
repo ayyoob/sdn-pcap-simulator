@@ -111,7 +111,7 @@ public class Simulator {
                 Packet packet;
                 try {
                     packet = handle.getNextPacketEx();
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException | ArrayIndexOutOfBoundsException e) {
                     continue;
                 }
 
@@ -188,7 +188,6 @@ public class Simulator {
                             } else if (udpPacket.getHeader().getSrcPort().valueAsString().equals(Constants.DNS_PORT)) {
                                 DnsPacket dnsPacket = udpPacket.get(DnsPacket.class);
                                 try {
-
                                     List<DnsResourceRecord> dnsResourceRecords = dnsPacket.getHeader().getAnswers();
                                     List<String> answers = new ArrayList<String>();
                                     simPacket.setDnsQname(dnsPacket.getHeader().getQuestions().get(0).getQName().getName());

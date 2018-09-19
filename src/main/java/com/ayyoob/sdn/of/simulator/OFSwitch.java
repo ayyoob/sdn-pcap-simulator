@@ -20,6 +20,7 @@ public class OFSwitch {
         if (lastPacketTime > currentTime) {
             return;
         }
+
         cleanIdleFlows();
         for (StatListener statListener : OFController.getInstance().getStatListeners()) {
             statListener.process(dpid, packet);
@@ -150,13 +151,39 @@ public class OFSwitch {
             String ipProto=packet.getIpProto()== null ? "*": packet.getIpProto();
             String srcPort=packet.getSrcPort()== null ? "*": packet.getSrcPort();
             String dstPort=packet.getDstPort()== null ? "*": packet.getDstPort();
+            String icmpCode=packet.getIcmpCode()== null ? "*": packet.getIcmpCode();
+            String icmpType=packet.getIcmpType()== null ? "*": packet.getIcmpType();
+            //TODO temporary for testing purposes
+            boolean ipMatching ;
+            if (flow.getSrcIp().contains("/")) {
+                String ip = flow.getSrcIp().split("/")[0];
+                if (flow.getSrcIp().equals(Constants.LINK_LOCAL_MULTICAST_IP_RANGE)) {
+                    ip = "ff";
+                }
+                ipMatching = srcIp.startsWith(ip) || flow.getSrcIp().equals("*");
+            } else {
+                ipMatching = (srcIp.equals(flow.getSrcIp())  || flow.getSrcIp().equals("*"));
+            }
+            if (flow.getDstIp()!=null) {
+                if (flow.getDstIp().contains("/")) {
+                    String ip = flow.getDstIp().split("/")[0];
+                    if (flow.getDstIp().equals(Constants.LINK_LOCAL_MULTICAST_IP_RANGE)) {
+                        ip = "ff";
+                    }
+                    ipMatching = ipMatching && dstIp.startsWith(ip) || flow.getDstIp().equals("*");
+                } else {
+                    ipMatching = ipMatching && (dstIp.equals(flow.getDstIp()) || flow.getDstIp().equals("*"));
+                }
+            }
+
 
             boolean condition = (srcMac.equals(flow.getSrcMac()) || flow.getSrcMac().equals("*"))&&
                     (dstMac.equals(flow.getDstMac())  || flow.getDstMac().equals("*"))&&
                     (ethType.equals(flow.getEthType()) || flow.getEthType().equals("*")) &&
                     (vlanId.equals(flow.getVlanId())  || flow.getVlanId().equals("*"))&&
-                    (srcIp.equals(flow.getSrcIp())  || flow.getSrcIp().equals("*"))&&
-                    (dstIp.equals(flow.getDstIp())  || flow.getDstIp().equals("*"))&&
+                    ipMatching &&
+                    (icmpType.equals(flow.getIcmpType())  || flow.getIcmpType().equals("*"))&&
+                    (icmpCode.equals(flow.getIcmpCode())  || flow.getIcmpCode().equals("*"))&&
                     (ipProto.equals(flow.getIpProto())  || flow.getIpProto().equals("*"))&&
                     (srcPort.equals(flow.getSrcPort())  || flow.getSrcPort().equals("*"))&&
                     (dstPort.equals(flow.getDstPort()) || flow.getDstPort().equals("*"));
