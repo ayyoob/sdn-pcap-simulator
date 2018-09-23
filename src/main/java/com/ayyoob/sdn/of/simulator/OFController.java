@@ -84,6 +84,11 @@ public class OFController {
         registeredApps.clear();
     }
 
+
+    public void removeStatsListener() {
+        statListeners.clear();
+    }
+
     public void printStats() {
         String stats = "";
         for (String dpId : packetTransmittionMap.keySet()) {

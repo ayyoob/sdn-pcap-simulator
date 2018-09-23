@@ -1,6 +1,7 @@
 package com.ayyoob.sdn.of.simulator.apps.legacydevice;
 
 import com.ayyoob.sdn.of.simulator.Constants;
+import com.ayyoob.sdn.of.simulator.OFController;
 import com.ayyoob.sdn.of.simulator.OFFlow;
 import com.ayyoob.sdn.of.simulator.SimPacket;
 import com.ayyoob.sdn.of.simulator.apps.StatListener;
@@ -16,26 +17,26 @@ import java.util.*;
 
 public class LegacyDeviceFlowOptimizer implements StatListener {
 
-    private static boolean enabled = true;
-    private static long summerizationTimeInMillis = 60000;
+    private boolean enabled = true;
+    private long summerizationTimeInMillis = 60000;
     private List<OFFlow> columns = new ArrayList<>();
     private long lastLogTime = 0;
     private String dpId;
     private String deviceMac;
-    private static final String WILD_CARD= "*";
-    private static final String MUD_URN = "urn:ietf:params:mud";
-    private static DeviceNode allMUDNode;
-    private static List<DeviceNode> identifiedDevices = new ArrayList<>();
-    private static String similarityCounterfilename;
-    private static String variationCounterfilename;
+    private final String WILD_CARD= "*";
+    private final String MUD_URN = "urn:ietf:params:mud";
+    private DeviceNode allMUDNode;
+    private List<DeviceNode> identifiedDevices = new ArrayList<>();
+    private String similarityCounterfilename;
+    private String variationCounterfilename;
     private List<String> similarityCounterData = new ArrayList<>();
     private List<String> variationCounterData = new ArrayList<>();
-    private static String deviceVariationCounterfilename;
+    private String deviceVariationCounterfilename;
     private List<String> deviceVariationCounterData = new ArrayList<>();
     private List<String> alldeviceVariationCounterData = new ArrayList<>();
-    private  static String deviceName ;
-    private static Map<String, List<String>> compareDevices = new HashMap<>();
-    private static String currentPath;
+    private String deviceName ;
+    private Map<String, List<String>> compareDevices = new HashMap<>();
+    private String currentPath;
 
 
     @Override
@@ -80,7 +81,7 @@ public class LegacyDeviceFlowOptimizer implements StatListener {
                     for (DeviceNode.Directions direction : DeviceNode.Directions.values()) {
                         for (EndpointNode endpointNode : deviceNode.getEndpointNodes(direction)) {
                             for (EdgeNode edgeNode : endpointNode.getEdges()) {
-                                if (allMUDNode.getMatchingEndpointNode(direction, endpointNode.getValue(), edgeNode) == null) {
+                                if (allMUDNode.getAbsoluteMatchingEndpointNode(direction, endpointNode.getValue(), edgeNode) == null) {
                                     allMUDNode.addNode(direction, endpointNode.getValue(), edgeNode);
                                 }
                             }
@@ -307,12 +308,13 @@ public class LegacyDeviceFlowOptimizer implements StatListener {
                 List<EndpointNode> discoveredEndpoints = deviceNode.getEndpointNodes(direction);
 
                 for (EndpointNode discoveredEndpoint : discoveredEndpoints) {
-
+                    Set<EdgeNode> edgeNodeSet = new HashSet<>();
                     for (EdgeNode edgeNode : discoveredEndpoint.getEdges()) {
                         EndpointNode bEndpointNode = existingDevice.getMatchingEndpointNode(direction,
                                 discoveredEndpoint.getValue(), edgeNode);
-                        if (bEndpointNode != null) {
+                        if (bEndpointNode != null && !edgeNodeSet.contains(bEndpointNode.getEdges().get(0))) {
                             numberOfAIntersectionBRules++;
+                            edgeNodeSet.addAll(bEndpointNode.getEdges());
                         }
                     }
                 }
@@ -367,12 +369,14 @@ public class LegacyDeviceFlowOptimizer implements StatListener {
                         numberOfAIntersectionBEndpoints++;
                         numberOfAIntersectionBEndpointDirection++;
                     }
+                    Set<EdgeNode> edgeNodeSet = new HashSet<>();
                     for (EdgeNode edgeNode : discoveredEndpoint.getEdges()) {
                         EndpointNode bEndpointNode = referedDevice.getMatchingEndpointNode(direction,
                                 discoveredEndpoint.getValue(), edgeNode);
-                        if (bEndpointNode != null) {
+                        if (bEndpointNode != null && !edgeNodeSet.contains(bEndpointNode.getEdges().get(0))) {
                             numberOfAIntersectionBRulesDirection++;
                             numberOfAIntersectionBRules++;
+                            edgeNodeSet.add(bEndpointNode.getEdges().get(0));
 
                         }
                     }
@@ -408,6 +412,18 @@ public class LegacyDeviceFlowOptimizer implements StatListener {
     public void complete() {
         if (!enabled) {
             return;
+        }
+        long currentTime = OFController.getInstance().getSwitch(dpId).getCurrentTime() + 1;
+        optimizeDevice();
+        String[] similarityInfo = calculateVariations();
+        String perDevice = calculateVariations(deviceName);
+        similarityCounterData.add(currentTime + similarityInfo[0]);
+        variationCounterData.add(currentTime + similarityInfo[1]);
+        deviceVariationCounterData.add(currentTime + perDevice);
+
+        for (String key : compareDevices.keySet()) {
+            String perCompareDevice = calculateVariations(key);
+            compareDevices.get(key).add(currentTime + perCompareDevice);
         }
 
         try {
@@ -688,28 +704,28 @@ public class LegacyDeviceFlowOptimizer implements StatListener {
 
     }
 
-    private static void writeSimilarityCountRaw(List<String> records) throws IOException {
+    private void writeSimilarityCountRaw(List<String> records) throws IOException {
         File file = new File(similarityCounterfilename);
         FileWriter writer = new FileWriter(file, true);
         // System.out.println("Writing raw... ");
         write(records, writer);
     }
 
-    private static void writeVariationCountRaw(List<String> records) throws IOException {
+    private void writeVariationCountRaw(List<String> records) throws IOException {
         File file = new File(variationCounterfilename);
         FileWriter writer = new FileWriter(file, true);
         //System.out.println("Writing raw... ");
         write(records, writer);
     }
 
-    private static void writeDeviceVariationCountRaw(List<String> records) throws IOException {
+    private void writeDeviceVariationCountRaw(List<String> records) throws IOException {
         File file = new File(deviceVariationCounterfilename);
         FileWriter writer = new FileWriter(file, true);
         //System.out.println("Writing raw... ");
         write(records, writer);
     }
 
-    private static void writeCompareDeviceVariationCountRaw(String compareDeviceName, List<String> records) throws IOException {
+    private void writeCompareDeviceVariationCountRaw(String compareDeviceName, List<String> records) throws IOException {
         String fileName = currentPath + File.separator + "result" + File.separator + compareDeviceName + "_VariationCounter.csv";
         File file = new File(fileName);
         FileWriter writer = new FileWriter(file, true);
@@ -728,7 +744,7 @@ public class LegacyDeviceFlowOptimizer implements StatListener {
 
     private static double round(double value) {
 
-        long factor = (long) Math.pow(10, 2);
+        long factor = (long) Math.pow(10, 1);
         value = value * factor;
         long tmp = Math.round(value);
         return (double) tmp / factor;

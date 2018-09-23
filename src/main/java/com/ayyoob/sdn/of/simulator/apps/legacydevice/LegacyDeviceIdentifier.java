@@ -12,10 +12,10 @@ import java.util.*;
 
 public class LegacyDeviceIdentifier implements ControllerApp {
 
-	private static boolean enabled = true;
-	private static String deviceMac;
-	private static String gatewayIp;
-	private static String dpId;
+	private boolean enabled = true;
+	private String deviceMac;
+	private String gatewayIp;
+	private String dpId;
 	private static long idleTimeout = 120000;
 	private static final int COMMON_SKIP_FLOW_PRIORITY = 5;
 	private static final int REACTIVE_INTERNET_FLOW_PRIORITY = 7;
@@ -27,8 +27,6 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 	private static final String DEFAULT_GATEWAY_CONTROLLER = "urn:ietf:params:mud:gateway";
 	private static final String DEFAULT_DNS_CONTROLLER = "urn:ietf:params:mud:dns";
 	private static final String DEFAULT_NTP_CONTROLLER = "urn:ietf:params:mud:ntp";
-	private static LinkedList<String> latestDNS = new LinkedList<>();
-	private static int MAX_DNS = 15;
 	public static int packetCounter = 0;
 	//todo workaround
 	String ipList[] = {"10.", "172.16.", "192.168.", "100."};

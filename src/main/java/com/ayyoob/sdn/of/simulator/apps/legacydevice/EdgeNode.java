@@ -65,6 +65,14 @@ public class EdgeNode {
 				&& (this.icmpType == -1 ||this.icmpType == edgeNode.icmpType);
 	}
 
+	public boolean isAbsoluteMatching(EdgeNode edgeNode) {
+		return this.ethType == edgeNode.getEthType() && this.ipProtocol == edgeNode.getIpProtocol()
+				&& this.sourcePort == edgeNode.getSourcePort()
+				&& this.destPort == edgeNode.getDestPort()
+				&& this.icmpCode == edgeNode.icmpCode
+				&& this.icmpType == edgeNode.icmpType;
+	}
+
 	@Override
 	public String toString() {
 		return "eth_type:" + getValue(ethType) + ",ip_proto:" + getValue(ipProtocol) + ",source_port:" + getValue(sourcePort)

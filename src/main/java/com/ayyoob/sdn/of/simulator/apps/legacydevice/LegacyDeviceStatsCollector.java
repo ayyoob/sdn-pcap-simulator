@@ -16,9 +16,9 @@ import java.util.List;
 
 public class LegacyDeviceStatsCollector implements StatListener {
 
-    private static boolean enabled = true;
-    private static boolean graphPrint = true;
-    private static long summerizationTimeInMillis = 60000;
+    private boolean enabled = true;
+    private boolean graphPrint = true;
+    private long summerizationTimeInMillis = 60000;
     private List<OFFlow> columns = new ArrayList<>();
     private long lastLogTime = 0;
     private String dpId;
@@ -27,10 +27,10 @@ public class LegacyDeviceStatsCollector implements StatListener {
     private List<String> packetCounterdata = new ArrayList<>();
     private List<String> edgeCounterdata = new ArrayList<>();
     private List<String> graphData = new ArrayList<>();
-    private static String graphFileName;
-    private static String flowCounterfilename;
-    private static String packetCounterfilename;
-    private static String edgeCounterfilename;
+    private String graphFileName;
+    private String flowCounterfilename;
+    private String packetCounterfilename;
+    private String edgeCounterfilename;
 
     private static int graphCounter = 0;
 
@@ -146,6 +146,18 @@ public class LegacyDeviceStatsCollector implements StatListener {
             return;
         }
         try {
+            long currentTime = OFController.getInstance().getSwitch(dpId).getCurrentTime() + 1;
+            lastLogTime = currentTime;
+            flowCounterdata.add(currentTime + "," + getDeviceFlowsSize());
+            packetCounterdata.add(currentTime + "," + LegacyDeviceIdentifier.packetCounter);
+            edgeCounterdata.add(currentTime + "," + LegacyDeviceIdentifier.deviceNode.numberOFEdgeNode);
+            LegacyDeviceIdentifier.packetCounter = 0;
+            if (graphPrint) {
+                graphData.add("" + currentTime);
+                graphData.add(LegacyDeviceIdentifier.deviceNode.getNodeString());
+                graphData.add("\n\n ==========================================\n\n");
+                graphCounter = 0;
+            }
 
             writeFlowCountRaw(flowCounterdata);
             if (graphPrint) {
@@ -160,7 +172,7 @@ public class LegacyDeviceStatsCollector implements StatListener {
         }
     }
 
-    private static void writeGraph(List<String> records) throws IOException {
+    private void writeGraph(List<String> records) throws IOException {
         File file = new File(graphFileName);
         FileWriter writer = new FileWriter(file, true);
         //System.out.println("Writing graph raw... ");
@@ -168,7 +180,7 @@ public class LegacyDeviceStatsCollector implements StatListener {
 
     }
 
-    private static void writeFlowCountRaw(List<String> records) throws IOException {
+    private void writeFlowCountRaw(List<String> records) throws IOException {
         File file = new File(flowCounterfilename);
         FileWriter writer = new FileWriter(file, true);
         //System.out.println("Writing raw... ");
@@ -176,14 +188,14 @@ public class LegacyDeviceStatsCollector implements StatListener {
 
     }
 
-    private static void writePacketCountRaw(List<String> records) throws IOException {
+    private void writePacketCountRaw(List<String> records) throws IOException {
         File file = new File(packetCounterfilename);
         FileWriter writer = new FileWriter(file, true);
        // System.out.println("Writing raw... ");
         write(records, writer);
     }
 
-    private static void writeEdgeCountRaw(List<String> records) throws IOException {
+    private void writeEdgeCountRaw(List<String> records) throws IOException {
         File file = new File(edgeCounterfilename);
         FileWriter writer = new FileWriter(file, true);
         //System.out.println("Writing raw... ");

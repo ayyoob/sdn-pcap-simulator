@@ -176,6 +176,25 @@ public class DeviceNode {
 		return false;
 	}
 
+	public EndpointNode getAbsoluteMatchingEndpointNode(Directions direction, String endpoint, EdgeNode edgeNode) {
+		List<EndpointNode> endpointNodes = getEndpointNodes(direction);
+		for (EndpointNode endpointNode : endpointNodes) {
+			if (endpointNode.getValue().equals(endpoint)) {
+				for (EdgeNode edge : endpointNode.getEdges()) {
+					if (edge.isAbsoluteMatching(edgeNode)) {
+						EndpointNode ed = new EndpointNode();
+						ed.setValue(endpointNode.getValue());
+						List<EdgeNode> edges  = new ArrayList<>();
+						edges.add(edge);
+						ed.setEdges(edges);
+						return ed;
+					}
+				}
+			}
+		}
+		return null;
+	}
+
 	public EndpointNode getMatchingEndpointNode(Directions direction, String endpoint, EdgeNode edgeNode) {
 		List<EndpointNode> endpointNodes = getEndpointNodes(direction);
 		for (EndpointNode endpointNode : endpointNodes) {

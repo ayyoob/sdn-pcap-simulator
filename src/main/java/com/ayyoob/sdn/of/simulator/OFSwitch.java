@@ -20,7 +20,6 @@ public class OFSwitch {
         if (lastPacketTime > currentTime) {
             return;
         }
-
         cleanIdleFlows();
         for (StatListener statListener : OFController.getInstance().getStatListeners()) {
             statListener.process(dpid, packet);

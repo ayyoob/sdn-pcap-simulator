@@ -94,7 +94,6 @@ public class Simulator {
         long totalPacketCount=0;
         long sumPacketProcessingTime=0;
         PcapDumper dumper = null;
-
         PcapHandle handle;
         try {
             handle = Pcaps.openOffline(pcapLocation, PcapHandle.TimestampPrecision.NANO);
