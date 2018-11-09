@@ -1,5 +1,9 @@
 package com.ayyoob.sdn.of.simulator.apps.legacydevice;
 
+import com.ayyoob.sdn.of.simulator.Constants;
+
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.*;
 
 public class DeviceNode {
@@ -7,6 +11,15 @@ public class DeviceNode {
 	ArrayList<EndpointNode>[] root = new ArrayList[4];
 	String value;
 	int numberOFEdgeNode;
+	boolean supportsSsdp;
+
+	public boolean isSupportsSsdp() {
+		return supportsSsdp;
+	}
+
+	public void setSupportsSsdp(boolean supportsSsdp) {
+		this.supportsSsdp = supportsSsdp;
+	}
 
 	public DeviceNode(String value) {
 		this.value = value;
@@ -44,7 +57,7 @@ public class DeviceNode {
 
 	public EndpointNode getEndpointNode(Directions direction, String endpoint) {
 		List<EndpointNode> endpointNodes = getEndpointNodes(direction);
-		for (int i = 0; i < i++; endpointNodes.size()) {
+		for (int i = 0; i < endpointNodes.size(); i++) {
 			if (endpointNodes.get(i).getValue().equals(endpoint)) {
 				return endpointNodes.get(i);
 			}
@@ -53,6 +66,7 @@ public class DeviceNode {
 	}
 
 	public void addNode(Directions direction, String endpoint, EdgeNode edgeNode) {
+
 		List<EndpointNode> endpointNodes = getEndpointNodes(direction);
 		for (EndpointNode endpointNode : endpointNodes) {
 			if (endpointNode.getValue().equals(endpoint)) {
@@ -141,7 +155,8 @@ public class DeviceNode {
 	public EndpointNode getNode(Directions direction, String endpoint, EdgeNode edgeNode) {
 		List<EndpointNode> endpointNodes = getEndpointNodes(direction);
 		for (EndpointNode endpointNode : endpointNodes) {
-			if (endpointNode.getValue().equals(endpoint) || (isIp(endpoint) && endpointNode.getValue().equals("*"))) {
+			if (endpointNode.getValue().equals(endpoint)) {
+				//if (endpointNode.getValue().equals(endpoint) || (isIp(endpoint) && endpointNode.getValue().equals("*"))) {
 				for (EdgeNode edge : endpointNode.getEdges()) {
 					if (edge.isMatching(edgeNode)) {
 						EndpointNode ed = new EndpointNode();
@@ -151,6 +166,25 @@ public class DeviceNode {
 						ed.setEdges(edges);
 						return ed;
 					}
+				}
+			}
+		}
+		//check into wildcard
+		List<EdgeNode> edgeNodes = getEdgeNodes(direction, "*");
+		if ((isIp(endpoint) && edgeNodes!= null)) {
+			//if (endpointNode.getValue().equals(endpoint) || (isIp(endpoint) && endpointNode.getValue().equals("*"))) {
+			for (EdgeNode edge : edgeNodes) {
+				if (edge.isMatching(edgeNode)) {
+					if (edge.getSourcePortStart() == edge.getSourcePortEnd()
+							|| edge.getDestPortStart() == edge.getDestPortEnd()) {
+						EndpointNode ed = new EndpointNode();
+						ed.setValue("*");
+						List<EdgeNode> edges = new ArrayList<>();
+						edges.add(edge);
+						ed.setEdges(edges);
+						return ed;
+					}
+
 				}
 			}
 		}
@@ -250,11 +284,11 @@ public class DeviceNode {
 	private boolean isIp(String endpoint) {
 		String ip = endpoint.replace(":", "").replace(".", "");
 		try {
-			int x = Integer.parseInt(endpoint);
+			long x = Long.parseLong(ip);
 			return true;
 		} catch (NumberFormatException e) {
 			try {
-				int x = Integer.parseInt(endpoint, 16);
+				long x = Long.parseLong(ip, 16);
 				return true;
 			} catch (NumberFormatException ex) {
 				return false;
@@ -262,4 +296,56 @@ public class DeviceNode {
 
 		}
 	}
+
+	private String[] listOfTopLevelDomainName = {".com", ".org" , ".net" , ".int" , ".edu" , ".gov" , ".mil" ,".arpa"};
+
+
+	public DeviceNode getEndpointOptimizedNode() {
+		DeviceNode newNode = new DeviceNode(this.value);
+		for (Directions direction : Directions.values()) {
+			for (EndpointNode endpointNode : getEndpointNodes(direction)) {
+				String endpoint = endpointNode.getValue();
+				boolean isIpAddr = isIp(endpointNode.getValue());
+				EndpointNode retrievedNode = null;
+				if (!isIpAddr) {
+					for (String toplevelDomain : listOfTopLevelDomainName) {
+						endpoint = endpoint.replace(toplevelDomain, "");
+					}
+					String endpointStruct[] = endpoint.split("\\.");
+					endpoint = endpointStruct[endpointStruct.length - 1];
+					retrievedNode = newNode.getEndpointNode(direction, endpoint);
+				}
+				if (retrievedNode != null) {
+					for (EdgeNode edge : endpointNode.getEdges()) {
+						boolean added =false;
+						for (EdgeNode retNode : retrievedNode.getEdges()) {
+							if (retNode.equals(edge)) {
+								added = true;
+							}
+						}
+						if (!added) {
+							newNode.addNode(direction, endpoint, edge.clone());
+						}
+					}
+				} else {
+					for (EdgeNode edge : endpointNode.getEdges()) {
+						newNode.addNode(direction, endpoint, edge.clone());
+					}
+				}
+			}
+		}
+		return newNode;
+	}
+
+	public int getEdgeCount() {
+		int edgeCount = 0;
+		for (Directions direction : Directions.values()) {
+			for (EndpointNode endpointNode : getEndpointNodes(direction)) {
+				edgeCount = edgeCount + endpointNode.getEdges().size();
+			}
+		}
+		return edgeCount;
+	}
+
+
 }

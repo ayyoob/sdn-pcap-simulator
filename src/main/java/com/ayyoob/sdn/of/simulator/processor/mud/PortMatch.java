@@ -16,9 +16,20 @@
  * under the License.
  */
 package com.ayyoob.sdn.of.simulator.processor.mud;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class PortMatch {
 	private String operator;
 	private int port;
+
+	@JsonProperty("lower-port")
+	private int lowerPort;
+
+	@JsonProperty("upper-port")
+	private int upperPort;
 
 	public String getOperator() {
 		return operator;
@@ -34,5 +45,21 @@ public class PortMatch {
 
 	public void setPort(int port) {
 		this.port = port;
+	}
+
+	public int getLowerPort() {
+		return lowerPort;
+	}
+
+	public void setLowerPort(int lowerPort) {
+		this.lowerPort = lowerPort;
+	}
+
+	public int getUpperPort() {
+		return upperPort;
+	}
+
+	public void setUpperPort(int upperPort) {
+		this.upperPort = upperPort;
 	}
 }

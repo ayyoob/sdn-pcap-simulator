@@ -16,4 +16,8 @@ public class Constants {
 
     public static final String LINK_LOCAL_MULTICAST_IP_RANGE = "ff00::/8";
 
+    public static final int MIN_PORT = 0;
+    public static final int RESERVED_MIN_PORT = 1024;
+    public static final int MAX_PORT = 65535;
+
 }

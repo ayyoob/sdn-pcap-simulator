@@ -161,7 +161,8 @@ public class Simulator {
                             }
                             simPacket.setSrcPort(tcpPacket.getHeader().getSrcPort().valueAsString());
                             simPacket.setDstPort(tcpPacket.getHeader().getDstPort().valueAsString());
-                            simPacket.setTcpFlag(tcpPacket.getHeader().getSyn(),tcpPacket.getHeader().getAck());
+                            simPacket.setTcpFlag(tcpPacket.getHeader().getSyn(),tcpPacket.getHeader().getAck()
+                            ,tcpPacket.getHeader().getRst());
 
                         } else if (protocol.equals(IpNumber.UDP.valueAsString()) ) {
                             UdpPacket udpPacket;
@@ -176,6 +177,7 @@ public class Simulator {
                             if (udpPacket.getHeader().getDstPort().valueAsString().equals(Constants.DNS_PORT)) {
                                 try {
                                     DnsPacket dnsPacket = udpPacket.get(DnsPacket.class);
+//                                    dnsPacket.getHeader().getAdditionalInfo().get(0).getDataType().compareTo()
                                     List<DnsQuestion> dnsQuestions = dnsPacket.getHeader().getQuestions();
                                     if (dnsQuestions.size() > 0) {
                                         simPacket.setDnsQname(dnsQuestions.get(0).getQName().getName());

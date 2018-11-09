@@ -7,6 +7,7 @@ public class EndpointNode {
 	int id;
 	List<EdgeNode> edges;
 	int previousChecked = 0;
+	int tmpEdgeCount = 0;
 
 	public int getId() {
 		return id;
@@ -41,4 +42,11 @@ public class EndpointNode {
 		this.previousChecked = previousChecked;
 	}
 
+	public int getTmpEdgeCount() {
+		return tmpEdgeCount;
+	}
+
+	public void setTmpEdgeCount(int tmpEdgeCount) {
+		this.tmpEdgeCount = tmpEdgeCount;
+	}
 }

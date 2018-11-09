@@ -91,7 +91,7 @@ public class LegacyDeviceStatsCollector implements StatListener {
             lastLogTime = currentTime;
             flowCounterdata.add(currentTime + "," + getDeviceFlowsSize());
             packetCounterdata.add(currentTime + "," + LegacyDeviceIdentifier.packetCounter);
-            edgeCounterdata.add(currentTime + "," + LegacyDeviceIdentifier.deviceNode.numberOFEdgeNode);
+            edgeCounterdata.add(currentTime + "," + LegacyDeviceIdentifier.deviceNode.getEdgeCount());
             LegacyDeviceIdentifier.packetCounter = 0;
             if (graphCounter == 15) {
                 if (graphPrint) {
@@ -104,7 +104,7 @@ public class LegacyDeviceStatsCollector implements StatListener {
             graphCounter++;
         }
 
-        if (flowCounterdata.size() > 1000) {
+        if (flowCounterdata.size() > 2) {
             try {
                 writePacketCountRaw(packetCounterdata);
                 writeFlowCountRaw(flowCounterdata);
@@ -117,7 +117,7 @@ public class LegacyDeviceStatsCollector implements StatListener {
             }
         }
 
-        if (graphData.size() > 20) {
+        if (graphData.size() > 2) {
             try {
                 writeGraph(graphData);
                 graphData.clear();
@@ -162,8 +162,6 @@ public class LegacyDeviceStatsCollector implements StatListener {
             writeFlowCountRaw(flowCounterdata);
             if (graphPrint) {
                 writeGraph(graphData);
-            } else {
-                System.out.println(LegacyDeviceIdentifier.deviceNode.getNodeString());
             }
             writePacketCountRaw(packetCounterdata);
             writeEdgeCountRaw(edgeCounterdata);

@@ -26,7 +26,8 @@ public class SimPacket {
     public enum Flag {
         SYN,
         SYN_ACK,
-        OTHER
+        OTHER,
+        RST_ACK
     }
 
     public String getdnsQname() {
@@ -148,13 +149,16 @@ public class SimPacket {
         return tcpFlag;
     }
 
-    public void setTcpFlag(boolean syn, boolean ack) {
+    public void setTcpFlag(boolean syn, boolean ack, boolean rst) {
         tcpFlag = Flag.OTHER;
         if (syn) {
             tcpFlag = Flag.SYN;
             if (ack) {
                 tcpFlag = Flag.SYN_ACK;
             }
+        }
+        if (rst && ack) {
+            tcpFlag = Flag.RST_ACK;
         }
     }
 

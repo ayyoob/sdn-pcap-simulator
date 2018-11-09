@@ -89,7 +89,7 @@
 
         "MudieFlowDeployer": {
             "enable": false,
-            "deviceMac" : "50:c7:bf:00:56:39",
+            "deviceMac" : "ec:1a:59:83:28:11",
             "gatewayIp" : "192.168.1.1",
             "dpId":"14:cc:20:51:33:ea",
             "idleTimeoutInSeconds": 7200,
@@ -99,8 +99,9 @@
 
         "LegacyDeviceIdentifier": {
             "enable": true,
-            "deviceMac" : "50:c7:bf:00:56:39",
+            "deviceMac" : "b4:75:0e:ec:e5:a9",
             "gatewayIp" : "192.168.1.1",
+            "gatewayIpv6" : "fe80:0:0:0:16cc:20ff:fe51:33ea",
             "dpId":"14:cc:20:51:33:ea",
             "idleTimeoutInSeconds": 60
         },
@@ -108,24 +109,24 @@
         "LegacyDeviceStatsCollector": {
             "enabled": true,
             "summerizationTimeInSeconds": 60,
-            "device" : "50:c7:bf:00:56:39",
+            "device" : "b4:75:0e:ec:e5:a9",
             "dpId":"14:cc:20:51:33:ea",
             "filePostFix": "60",
-            "graphPrint": true
+            "graphPrint": false
         },
 
         "LegacyDeviceFlowOptimizer": {
             "enabled": true,
             "summerizationTimeInSeconds": 900,
-            "device" : "50:c7:bf:00:56:39",
-            "deviceName" : "tplinkplugMud",
+            "device" : "b4:75:0e:ec:e5:a9",
+            "deviceName" : "belkincameraMud",
             "compareDevices": "",
             "dpId":"14:cc:20:51:33:ea",
             "profiles":"/Users/ayyoobhamza/Desktop/unsw/4-legacydevice/mudProfiles/new"
         }
     },
 
-    "pcapLocation": "/Users/ayyoobhamza/Desktop/unsw/4-legacydevice/dataset/50c7bf005639.pcap",
+    "pcapLocation": "/Users/ayyoobhamza/Desktop/unsw/4-legacydevice/dataset/",
 
     "inspectFileWrite": false,
     "inspectFileName": "awairAirQuality.pcap"

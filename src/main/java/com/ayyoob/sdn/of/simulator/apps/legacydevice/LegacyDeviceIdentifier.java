@@ -15,19 +15,21 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 	private boolean enabled = true;
 	private String deviceMac;
 	private String gatewayIp;
+	private String gatewayIpv6;
 	private String dpId;
 	private static long idleTimeout = 120000;
 	private static final int COMMON_SKIP_FLOW_PRIORITY = 5;
-	private static final int REACTIVE_INTERNET_FLOW_PRIORITY = 7;
-	private static final int REACTIVE_LOCAL_FLOW_PRIORITY = 6;
+	private static final int REACTIVE_INTERNET_FLOW_PRIORITY = 10;
+	private static final int REACTIVE_LOCAL_FLOW_PRIORITY = 9;
 	private Map<String, List<String>> dnsIpMap = new HashMap<>();
 	private static int MAXIP_PER_DNS = 150;
 	private static String WILDCARD = "*";
 	public static DeviceNode deviceNode;
-	private static final String DEFAULT_GATEWAY_CONTROLLER = "urn:ietf:params:mud:gateway";
+	public static final String DEFAULT_GATEWAY_CONTROLLER = "urn:ietf:params:mud:gateway";
 	private static final String DEFAULT_DNS_CONTROLLER = "urn:ietf:params:mud:dns";
 	private static final String DEFAULT_NTP_CONTROLLER = "urn:ietf:params:mud:ntp";
 	public static int packetCounter = 0;
+	private static final int EDGE_LIMIT = 200;
 	//todo workaround
 	String ipList[] = {"10.", "172.16.", "192.168.", "100."};
 
@@ -43,6 +45,7 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 
 
 		gatewayIp = (String) jsonObject.get("gatewayIp");
+		gatewayIpv6 = (String) jsonObject.get("gatewayIpv6");
 		dpId = (String) jsonObject.get("dpId");
 		OFFlow ofFlow = new OFFlow();
 		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
@@ -135,7 +138,7 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 	}
 
 	public String getControllerMapping(String ip, String port, String mac) {
-		if (gatewayIp.equals(ip)) {
+		if (gatewayIp.equals(ip) || gatewayIpv6.equals(ip) || gatewayIpv6.replace("0.0.0", "").equals(ip)) {
 			if (port.equals(Constants.DNS_PORT)) {
 				return DEFAULT_DNS_CONTROLLER;
 			} else if (port.equals(Constants.NTP_PORT)) {
@@ -158,15 +161,23 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 
 	@Override
 	public void process(String switchMac, SimPacket packet) {
+		//skip redirection packets
+		if (packet.getIcmpCode() != null && (packet.getIcmpType().equals("3") || packet.getIcmpType().equals("11")
+				|| packet.getIcmpType().equals("5"))) {
+			return;
+		}
 		packetCounter ++;
 		if (packet.getDnsAnswers() != null && packet.getDstMac().equals(deviceMac)) {
 			addDnsIps(packet.getdnsQname(), packet.getDnsAnswers());
 
 		}
+		if (packet.getSrcMac().equals(deviceMac) && packet.getDstPort()!=null && packet.getDstPort().equals("1900")) {
+			deviceNode.setSupportsSsdp(true);
+		}
 		String endpoint = WILDCARD;
 		//FromInternet //todo
 		if (packet.getSrcMac().equals(switchMac) && packet.getDstMac().equals(deviceMac)
-				 && packet.getSrcIp() != null && !packet.getSrcIp().equals(gatewayIp)) {
+				 && packet.getSrcIp() != null && !packet.getSrcIp().equals(gatewayIp) && !packet.getSrcIp().equals(gatewayIpv6)) {
 			endpoint = packet.getSrcIp();
 			List<String> endpoints = getDns(endpoint);
 			//tcp
@@ -182,12 +193,30 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					for (String dnsEndpoint : endpoints) {
 						EndpointNode retreivedNode = deviceNode.getNode(DeviceNode.Directions.FROM_INTERNET, dnsEndpoint, edgeNode);
 						if (retreivedNode == null) {
+
+							//attack rate limit.
+							int edgeLimit = 0;
+							EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_INTERNET
+									, dnsEndpoint);
+							if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+								for (EdgeNode ex : edd.getEdges()) {
+									if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+										edgeLimit++;
+									}
+								}
+							}
+							if (edgeLimit < EDGE_LIMIT) {
+								deviceNode.addNode(DeviceNode.Directions.FROM_INTERNET, dnsEndpoint, edgeNode);
+							}
+
 							if (!flowAdded) {
 								OFFlow ofFlow = new OFFlow();
 								ofFlow.setSrcMac(switchMac);
 								ofFlow.setDstMac(deviceMac);
 								ofFlow.setSrcIp(packet.getSrcIp());
-								ofFlow.setDstPort(packet.getDstPort());
+								if (edgeLimit < EDGE_LIMIT) {
+									ofFlow.setDstPort(packet.getDstPort());
+								}
 								ofFlow.setEthType(packet.getEthType());
 								ofFlow.setIpProto(packet.getIpProto());
 								ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
@@ -196,23 +225,50 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 								OFController.getInstance().addFlow(dpId, ofFlow);
 								flowAdded = true;
 							}
-							deviceNode.addNode(DeviceNode.Directions.FROM_INTERNET, dnsEndpoint, edgeNode);
+
+
 						} else if (!flowAdded) {
 							OFFlow ofFlow = new OFFlow();
 							ofFlow.setSrcMac(switchMac);
 							ofFlow.setDstMac(deviceMac);
 							ofFlow.setSrcIp(retreivedNode.getValue().equals(dnsEndpoint) ? packet.getSrcIp() :
 									retreivedNode.getValue().equals("*") ? "*": packet.getSrcIp());
-							if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-									&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
-								ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-								ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-								ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-							} else {
+							ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+							boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+									== retreivedNode.getEdges().get(0).getSourcePortEnd();
+							boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+									== retreivedNode.getEdges().get(0).getDestPortEnd();
+
+							if (singleSourcePortValue) {
+								ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
+							}
+
+							if (singleDestPortValue) {
+								ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+							}
+
+							if (!singleDestPortValue && !singleSourcePortValue) {
 								ofFlow.setDstPort(packet.getDstPort());
 								ofFlow.setSrcPort(packet.getSrcPort());
-								ofFlow.setIpProto(packet.getIpProto());
 							}
+
+							//attack rate limit.
+							int edgeLimit = 0;
+							EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_INTERNET
+									, retreivedNode.getValue());
+							if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+								for (EdgeNode ex : edd.getEdges()) {
+									if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+										edgeLimit++;
+									}
+								}
+							}
+							if (edgeLimit >= EDGE_LIMIT) {
+								ofFlow.setDstPort("*");
+								ofFlow.setSrcPort("*");
+							}
+
+
 							ofFlow.setEthType(packet.getEthType());
 							ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
 							ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
@@ -232,11 +288,28 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					for (String dnsEndpoint : endpoints) {
 						EndpointNode retreivedNode = deviceNode.getNode(DeviceNode.Directions.FROM_INTERNET, dnsEndpoint, edgeNode);
 						if (retreivedNode == null) {
+
+							int edgeLimit = 0;
+							EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_INTERNET
+									, dnsEndpoint);
+							if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+								for (EdgeNode ex : edd.getEdges()) {
+									if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+										edgeLimit++;
+									}
+								}
+							}
+							if (edgeLimit < EDGE_LIMIT) {
+								deviceNode.addNode(DeviceNode.Directions.FROM_INTERNET, dnsEndpoint, edgeNode);
+							}
+
 							OFFlow ofFlow = new OFFlow();
 							ofFlow.setSrcMac(switchMac);
 							ofFlow.setDstMac(deviceMac);
 							ofFlow.setSrcIp(packet.getSrcIp());
-							ofFlow.setSrcPort(packet.getSrcPort());
+							if (edgeLimit < EDGE_LIMIT) {
+								ofFlow.setSrcPort(packet.getSrcPort());
+							}
 							ofFlow.setEthType(packet.getEthType());
 							ofFlow.setIpProto(packet.getIpProto());
 							ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
@@ -246,21 +319,48 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 								OFController.getInstance().addFlow(dpId, ofFlow);
 								flowAdded =true;
 							}
-							deviceNode.addNode(DeviceNode.Directions.FROM_INTERNET, dnsEndpoint, edgeNode);
+
 						} else if(!flowAdded) {
 							OFFlow ofFlow = new OFFlow();
 							ofFlow.setSrcMac(switchMac);
 							ofFlow.setDstMac(deviceMac);
-							if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-									&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
-								ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-								ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-								ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-							} else {
+
+
+							ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+							boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+									== retreivedNode.getEdges().get(0).getSourcePortEnd();
+							boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+									== retreivedNode.getEdges().get(0).getDestPortEnd();
+
+							if (singleSourcePortValue) {
+								ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
+							}
+
+							if (singleDestPortValue) {
+								ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+							}
+
+							if (!singleDestPortValue && !singleSourcePortValue) {
 								ofFlow.setDstPort(packet.getDstPort());
 								ofFlow.setSrcPort(packet.getSrcPort());
-								ofFlow.setIpProto(packet.getIpProto());
 							}
+
+							//attack rate limit.
+							int edgeLimit = 0;
+							EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_INTERNET
+									, retreivedNode.getValue());
+							if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+								for (EdgeNode ex : edd.getEdges()) {
+									if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+										edgeLimit++;
+									}
+								}
+							}
+							if (edgeLimit >= EDGE_LIMIT) {
+								ofFlow.setDstPort("*");
+								ofFlow.setSrcPort("*");
+							}
+
 							ofFlow.setSrcIp(retreivedNode.getValue().equals(dnsEndpoint) ? packet.getSrcIp() :
 									retreivedNode.getValue().equals("*") ? "*": packet.getSrcIp());
 							ofFlow.setEthType(packet.getEthType());
@@ -283,6 +383,23 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
 					ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
 					ofFlow.setIdleTimeOut(idleTimeout);
+					if (packet.getTcpFlag() == SimPacket.Flag.RST_ACK) {
+						//attack rate limit.
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_INTERNET
+								, "*");
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == 6) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
+						}
+					}
 					OFController.getInstance().addFlow(dpId, ofFlow);
 				}
 				return;
@@ -307,6 +424,25 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 						ofFlow.setSrcIp(packet.getSrcIp());
 						ofFlow.setSrcPort(packet.getSrcPort());
 						ofFlow.setDstPort(packet.getDstPort());
+
+							//attack rate limit.
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_INTERNET
+								, dnsEndpoint);
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
+						} else {
+							deviceNode.addNode(DeviceNode.Directions.FROM_INTERNET, dnsEndpoint, edgeNode);
+						}
+
 						ofFlow.setEthType(packet.getEthType());
 						ofFlow.setIpProto(packet.getIpProto());
 						ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
@@ -316,23 +452,48 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 							OFController.getInstance().addFlow(dpId, ofFlow);
 							flowAdded = true;
 						}
-						deviceNode.addNode(DeviceNode.Directions.FROM_INTERNET, dnsEndpoint, edgeNode);
 					} else if (!flowAdded){
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(switchMac);
 						ofFlow.setDstMac(deviceMac);
 						ofFlow.setSrcIp(retreivedNode.getValue().equals(dnsEndpoint) ? packet.getSrcIp() :
 								retreivedNode.getValue().equals("*") ? "*": packet.getSrcIp());
-						if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-								&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
-							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-							ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-						} else {
+						ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+						boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+								== retreivedNode.getEdges().get(0).getSourcePortEnd();
+						boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+								== retreivedNode.getEdges().get(0).getDestPortEnd();
+
+						if (singleSourcePortValue) {
+							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
+						}
+
+						if (singleDestPortValue) {
+							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+						}
+
+						if (!singleDestPortValue && !singleSourcePortValue) {
 							ofFlow.setDstPort(packet.getDstPort());
 							ofFlow.setSrcPort(packet.getSrcPort());
-							ofFlow.setIpProto(packet.getIpProto());
+
 						}
+
+						//attack rate limit.
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_INTERNET
+								, retreivedNode.getValue());
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
+						}
+
 						ofFlow.setEthType(packet.getEthType());
 						ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
@@ -400,7 +561,8 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 		boolean publicIp = true;
 		if (packet.getDstIp() != null) {
 			for (String ipx : ipList) {
-				if (packet.getDstIp().startsWith(ipx) || isMulticastorBroadcast(packet.getDstMac())) {
+				if (packet.getDstIp().startsWith(ipx) || isMulticastorBroadcast(packet.getDstMac()) ||
+						packet.getDstIp().startsWith(gatewayIpv6.split(":")[0])) {
 					publicIp = false;
 					break;
 				}
@@ -426,11 +588,28 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					for (String dnsEndpoint : endpoints) {
 						EndpointNode retreivedNode = deviceNode.getNode(DeviceNode.Directions.TO_INTERNET, dnsEndpoint, edgeNode);
 						if (retreivedNode == null) {
+
+							int edgeLimit = 0;
+							EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_INTERNET
+									, dnsEndpoint);
+							if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+								for (EdgeNode ex : edd.getEdges()) {
+									if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+										edgeLimit++;
+									}
+								}
+							}
+							if (edgeLimit < EDGE_LIMIT) {
+								deviceNode.addNode(DeviceNode.Directions.TO_INTERNET, dnsEndpoint, edgeNode);
+							}
+
 							OFFlow ofFlow = new OFFlow();
 							ofFlow.setSrcMac(deviceMac);
-							ofFlow.setDstMac(switchMac);
+							ofFlow.setDstMac(packet.getDstMac());
 							ofFlow.setDstIp(packet.getDstIp());
-							ofFlow.setDstPort(packet.getDstPort());
+							if (edgeLimit < EDGE_LIMIT) {
+								ofFlow.setDstPort(packet.getDstPort());
+							}
 							ofFlow.setEthType(packet.getEthType());
 							ofFlow.setIpProto(packet.getIpProto());
 							ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
@@ -440,23 +619,47 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 								OFController.getInstance().addFlow(dpId, ofFlow);
 								flowAdded = true;
 							}
-							deviceNode.addNode(DeviceNode.Directions.TO_INTERNET, dnsEndpoint, edgeNode);
 						} else if (!flowAdded) {
 							OFFlow ofFlow = new OFFlow();
 							ofFlow.setSrcMac(deviceMac);
-							ofFlow.setDstMac(switchMac);
+							ofFlow.setDstMac(packet.getDstMac());
 							ofFlow.setDstIp(retreivedNode.getValue().equals(dnsEndpoint) ? packet.getDstIp() :
 									retreivedNode.getValue().equals("*") ? "*" : packet.getDstIp());
-							if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-									&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
-								ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-								ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-								ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-							} else {
+							ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+							boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+									== retreivedNode.getEdges().get(0).getSourcePortEnd();
+							boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+									== retreivedNode.getEdges().get(0).getDestPortEnd();
+
+							if (singleSourcePortValue) {
+								ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
+							}
+
+							if (singleDestPortValue) {
+								ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+							}
+
+							if (!singleDestPortValue && !singleSourcePortValue) {
 								ofFlow.setDstPort(packet.getDstPort());
 								ofFlow.setSrcPort(packet.getSrcPort());
-								ofFlow.setIpProto(packet.getIpProto());
 							}
+
+							//attack rate limit.
+							int edgeLimit = 0;
+							EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_INTERNET
+									, retreivedNode.getValue());
+							if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+								for (EdgeNode ex : edd.getEdges()) {
+									if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+										edgeLimit++;
+									}
+								}
+							}
+							if (edgeLimit >= EDGE_LIMIT) {
+								ofFlow.setDstPort("*");
+								ofFlow.setSrcPort("*");
+							}
+
 							ofFlow.setEthType(packet.getEthType());
 							ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
 							ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
@@ -477,11 +680,28 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					for (String dnsEndpoint : endpoints) {
 						EndpointNode retreivedNode = deviceNode.getNode(DeviceNode.Directions.TO_INTERNET, dnsEndpoint, edgeNode);
 						if (retreivedNode == null) {
+
+							int edgeLimit = 0;
+							EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_INTERNET
+									, dnsEndpoint);
+							if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+								for (EdgeNode ex : edd.getEdges()) {
+									if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+										edgeLimit++;
+									}
+								}
+							}
+							if (edgeLimit < EDGE_LIMIT) {
+								deviceNode.addNode(DeviceNode.Directions.TO_INTERNET, dnsEndpoint, edgeNode);
+							}
+
 							OFFlow ofFlow = new OFFlow();
 							ofFlow.setSrcMac(deviceMac);
-							ofFlow.setDstMac(switchMac);
+							ofFlow.setDstMac(packet.getDstMac());
 							ofFlow.setSrcIp(packet.getDstIp());
-							ofFlow.setSrcPort(packet.getSrcPort());
+							if (edgeLimit < EDGE_LIMIT) {
+								ofFlow.setSrcPort(packet.getSrcPort());
+							}
 							ofFlow.setEthType(packet.getEthType());
 							ofFlow.setIpProto(packet.getIpProto());
 							ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
@@ -490,20 +710,44 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 							if(!flowAdded) {OFController.getInstance().addFlow(dpId, ofFlow);
 								flowAdded = true;
 							}
-							deviceNode.addNode(DeviceNode.Directions.TO_INTERNET, dnsEndpoint, edgeNode);
+
 						} else if(!flowAdded){
 							OFFlow ofFlow = new OFFlow();
 							ofFlow.setSrcMac(deviceMac);
-							ofFlow.setDstMac(switchMac);
-							if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-									&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
-								ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-								ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-								ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-							} else {
+							ofFlow.setDstMac(packet.getDstMac());
+							ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+							boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+									== retreivedNode.getEdges().get(0).getSourcePortEnd();
+							boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+									== retreivedNode.getEdges().get(0).getDestPortEnd();
+
+							if (singleSourcePortValue) {
+								ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
+							}
+
+							if (singleDestPortValue) {
+								ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+							}
+
+							if (!singleDestPortValue && !singleSourcePortValue) {
 								ofFlow.setDstPort(packet.getDstPort());
 								ofFlow.setSrcPort(packet.getSrcPort());
-								ofFlow.setIpProto(packet.getIpProto());
+							}
+
+							//attack rate limit.
+							int edgeLimit = 0;
+							EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_INTERNET
+									, retreivedNode.getValue());
+							if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+								for (EdgeNode ex : edd.getEdges()) {
+									if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+										edgeLimit++;
+									}
+								}
+							}
+							if (edgeLimit >= EDGE_LIMIT) {
+								ofFlow.setDstPort("*");
+								ofFlow.setSrcPort("*");
 							}
 
 
@@ -521,7 +765,7 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 				} else {
 					OFFlow ofFlow = new OFFlow();
 					ofFlow.setSrcMac(deviceMac);
-					ofFlow.setDstMac(switchMac);
+					ofFlow.setDstMac(packet.getDstMac());
 					ofFlow.setDstIp(packet.getDstIp());
 					ofFlow.setSrcPort(packet.getSrcPort());
 					ofFlow.setDstPort(packet.getDstPort());
@@ -529,6 +773,23 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
 					ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
 					ofFlow.setIdleTimeOut(idleTimeout);
+					if (packet.getTcpFlag() == SimPacket.Flag.RST_ACK) {
+						//attack rate limit.
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_INTERNET
+								, "*");
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == 6) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
+						}
+					}
 					OFController.getInstance().addFlow(dpId, ofFlow);
 				}
 				return;
@@ -549,10 +810,27 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					if (retreivedNode == null) {
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(deviceMac);
-						ofFlow.setDstMac(switchMac);
+						ofFlow.setDstMac(packet.getDstMac());
 						ofFlow.setDstIp(packet.getDstIp());
 						ofFlow.setSrcPort(packet.getSrcPort());
 						ofFlow.setDstPort(packet.getDstPort());
+						//attack rate limit.
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_INTERNET
+								, dnsEndpoint);
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
+						} else {
+							deviceNode.addNode(DeviceNode.Directions.TO_INTERNET, dnsEndpoint, edgeNode);
+						}
 						ofFlow.setEthType(packet.getEthType());
 						ofFlow.setIpProto(packet.getIpProto());
 						ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
@@ -562,24 +840,49 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 							OFController.getInstance().addFlow(dpId, ofFlow);
 							flowAdded = true;
 						}
-						deviceNode.addNode(DeviceNode.Directions.TO_INTERNET, dnsEndpoint, edgeNode);
+
 					} else if (!flowAdded){
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(deviceMac);
-						ofFlow.setDstMac(switchMac);
+						ofFlow.setDstMac(packet.getDstMac());
 						ofFlow.setDstIp(retreivedNode.getValue().equals(dnsEndpoint) ? packet.getDstIp() :
 								retreivedNode.getValue().equals("*") ? "*" : packet.getDstIp());
 
-						if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-								&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
-							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-							ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-						} else {
+						ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+						boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+								== retreivedNode.getEdges().get(0).getSourcePortEnd();
+						boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+								== retreivedNode.getEdges().get(0).getDestPortEnd();
+
+						if (singleSourcePortValue) {
+							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
+						}
+
+						if (singleDestPortValue) {
+							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+						}
+
+						if (!singleDestPortValue && !singleSourcePortValue) {
 							ofFlow.setDstPort(packet.getDstPort());
 							ofFlow.setSrcPort(packet.getSrcPort());
-							ofFlow.setIpProto(packet.getIpProto());
 						}
+
+						//attack rate limit.
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_INTERNET
+								, retreivedNode.getValue());
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
+						}
+
 						ofFlow.setEthType(packet.getEthType());
 						ofFlow.setPriority(REACTIVE_INTERNET_FLOW_PRIORITY);
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
@@ -605,7 +908,7 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					if (retreivedNode == null) {
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(deviceMac);
-						ofFlow.setDstMac(switchMac);
+						ofFlow.setDstMac(packet.getDstMac());
 						ofFlow.setDstIp(packet.getDstIp());
 						ofFlow.setIcmpCode(packet.getIcmpCode());
 						ofFlow.setIcmpType(packet.getIcmpType());
@@ -622,7 +925,7 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					} else if (!flowAdded){
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(deviceMac);
-						ofFlow.setDstMac(switchMac);
+						ofFlow.setDstMac(packet.getDstMac());
 						ofFlow.setDstIp(retreivedNode.getValue().equals(dnsEndpoint) ? packet.getDstIp() :
 								retreivedNode.getValue().equals("*") ? "*" : packet.getDstIp());
 						ofFlow.setIcmpType(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIcmpType()));
@@ -642,6 +945,7 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 		}
 
 		//FromLocal //todo
+
 		if (packet.getDstMac().equals(deviceMac)) {
 			if (!(packet.getEthType().equals(Constants.ETH_TYPE_IPV6) || packet.getEthType().equals(Constants.ETH_TYPE_IPV4))) {
 				endpoint = WILDCARD;
@@ -660,32 +964,76 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 
 					EndpointNode retreivedNode = deviceNode.getNode(DeviceNode.Directions.FROM_LOCAL,endpoint, edgeNode);
 					if (retreivedNode == null) {
+
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_LOCAL
+								, endpoint);
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit < EDGE_LIMIT) {
+							deviceNode.addNode(DeviceNode.Directions.FROM_LOCAL, endpoint, edgeNode);
+						}
+
+
 						OFFlow ofFlow = new OFFlow();
-						ofFlow.setSrcMac(packet.getSrcMac());
+						if(isMulticastorBroadcast(packet.getSrcMac())) ofFlow.setSrcMac(packet.getSrcMac());
 						ofFlow.setDstMac(deviceMac);
-						ofFlow.setSrcIp(packet.getSrcIp());
-						ofFlow.setDstPort(packet.getDstPort());
+						if (!endpoint.equals("*")) {
+							ofFlow.setSrcIp(packet.getSrcIp());
+						}
+						if (edgeLimit < EDGE_LIMIT) {
+							ofFlow.setDstPort(packet.getDstPort());
+						}
 						ofFlow.setEthType(packet.getEthType());
 						ofFlow.setIpProto(packet.getIpProto());
 						ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
 						ofFlow.setIdleTimeOut(idleTimeout);
 						OFController.getInstance().addFlow(dpId, ofFlow);
-						deviceNode.addNode(DeviceNode.Directions.FROM_LOCAL, endpoint, edgeNode);
+
 					} else {
 						OFFlow ofFlow = new OFFlow();
-						ofFlow.setSrcMac(packet.getSrcMac());
+						if(isMulticastorBroadcast(packet.getSrcMac())) ofFlow.setSrcMac(packet.getSrcMac());
 						ofFlow.setDstMac(deviceMac);
-						ofFlow.setSrcIp(retreivedNode.getValue().equals(endpoint) ? packet.getSrcIp() : endpoint);
-						if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-								&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
-							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-							ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-						} else {
+						ofFlow.setSrcIp(retreivedNode.getValue().equals("*") ? "*" : packet.getSrcIp());
+						ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+						boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+								== retreivedNode.getEdges().get(0).getSourcePortEnd();
+						boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+								== retreivedNode.getEdges().get(0).getDestPortEnd();
+
+						if (singleSourcePortValue) {
+							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
+						}
+
+						if (singleDestPortValue) {
+							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+						}
+
+						if (!singleDestPortValue && !singleSourcePortValue) {
 							ofFlow.setDstPort(packet.getDstPort());
 							ofFlow.setSrcPort(packet.getSrcPort());
-							ofFlow.setIpProto(packet.getIpProto());
+						}
+
+						//attack rate limit.
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_LOCAL
+								, retreivedNode.getValue());
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
 						}
 
 						ofFlow.setEthType(packet.getEthType());
@@ -704,34 +1052,77 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 
 					EndpointNode retreivedNode = deviceNode.getNode(DeviceNode.Directions.FROM_LOCAL,endpoint, edgeNode);
 					if (retreivedNode == null) {
+
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_LOCAL
+								, endpoint);
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit < EDGE_LIMIT) {
+							deviceNode.addNode(DeviceNode.Directions.FROM_LOCAL, endpoint, edgeNode);
+						}
+
+
 						OFFlow ofFlow = new OFFlow();
-						ofFlow.setSrcMac(packet.getSrcMac());
+						if(isMulticastorBroadcast(packet.getSrcMac())) ofFlow.setSrcMac(packet.getSrcMac());
 						ofFlow.setDstMac(deviceMac);
-						ofFlow.setSrcIp(packet.getSrcIp());
-						ofFlow.setSrcPort(packet.getSrcPort());
+						if (!endpoint.equals("*")) {
+							ofFlow.setSrcIp(packet.getSrcIp());
+						}
+						if (edgeLimit < EDGE_LIMIT) {
+							ofFlow.setSrcPort(packet.getSrcPort());
+						}
 						ofFlow.setEthType(packet.getEthType());
 						ofFlow.setIpProto(packet.getIpProto());
 						ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
 						ofFlow.setIdleTimeOut(idleTimeout);
 						OFController.getInstance().addFlow(dpId, ofFlow);
-						deviceNode.addNode(DeviceNode.Directions.FROM_LOCAL, endpoint, edgeNode);
 					} else {
 						OFFlow ofFlow = new OFFlow();
-						ofFlow.setSrcMac(packet.getSrcMac());
+						if(isMulticastorBroadcast(packet.getSrcMac())) ofFlow.setSrcMac(packet.getSrcMac());
 						ofFlow.setDstMac(deviceMac);
-						if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-								&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
-							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-							ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-						} else {
-							ofFlow.setDstPort(packet.getDstPort());
-							ofFlow.setSrcPort(packet.getSrcPort());
-							ofFlow.setIpProto(packet.getIpProto());
+						ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+						boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+								== retreivedNode.getEdges().get(0).getSourcePortEnd();
+						boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+								== retreivedNode.getEdges().get(0).getDestPortEnd();
+
+						if (singleSourcePortValue) {
+							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
 						}
 
-						ofFlow.setSrcIp(retreivedNode.getValue().equals(endpoint) ? packet.getSrcIp() : endpoint);
+						if (singleDestPortValue) {
+							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+						}
+
+						if (!singleDestPortValue && !singleSourcePortValue) {
+							ofFlow.setDstPort(packet.getDstPort());
+							ofFlow.setSrcPort(packet.getSrcPort());
+						}
+
+						//attack rate limit.
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_LOCAL
+								, retreivedNode.getValue());
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
+						}
+
+						ofFlow.setSrcIp(retreivedNode.getValue().equals("*") ? "*" : packet.getSrcIp());
 						ofFlow.setEthType(packet.getEthType());
 						ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
@@ -740,12 +1131,35 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					}
 
 				} else {
+
+
 					OFFlow ofFlow = new OFFlow();
-					ofFlow.setSrcMac(packet.getSrcMac());
+					if(isMulticastorBroadcast(packet.getSrcMac())) ofFlow.setSrcMac(packet.getSrcMac());
 					ofFlow.setDstMac(deviceMac);
 					ofFlow.setSrcIp(packet.getSrcIp());
 					ofFlow.setSrcPort(packet.getSrcPort());
 					ofFlow.setDstPort(packet.getDstPort());
+
+					int edgeLimit = 0;
+					if (packet.getTcpFlag() == SimPacket.Flag.RST_ACK) {
+						//attack rate limit.
+						edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_LOCAL
+								, "*");
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == 6) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setSrcIp("*");
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
+						}
+					}
+
 					ofFlow.setEthType(packet.getEthType());
 					ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
 					ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
@@ -758,6 +1172,8 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 			//udp
 			if ((packet.getEthType().equals(Constants.ETH_TYPE_IPV6) || packet.getEthType().equals(Constants.ETH_TYPE_IPV4)) &&
 					packet.getIpProto().equals(Constants.UDP_PROTO)) {
+
+
 				EdgeNode edgeNode = new EdgeNode();
 				edgeNode.setSourcePort(Integer.parseInt(packet.getSrcPort()));
 				edgeNode.setDestPort(Integer.parseInt(packet.getDstPort()));
@@ -767,11 +1183,33 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 				EndpointNode retreivedNode = deviceNode.getNode(DeviceNode.Directions.FROM_LOCAL, endpoint, edgeNode);
 				if (retreivedNode == null) {
 					OFFlow ofFlow = new OFFlow();
-					ofFlow.setSrcMac(packet.getSrcMac());
+					if(isMulticastorBroadcast(packet.getSrcMac())) ofFlow.setSrcMac(packet.getSrcMac());
 					ofFlow.setDstMac(deviceMac);
-					ofFlow.setSrcIp(packet.getSrcIp());
+					if (!endpoint.equals("*")) {
+						ofFlow.setSrcIp(packet.getSrcIp());
+					}
 					ofFlow.setSrcPort(packet.getSrcPort());
 					ofFlow.setDstPort(packet.getDstPort());
+
+					//attack rate limit.
+					int edgeLimit = 0;
+					EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_LOCAL
+							, endpoint);
+					if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+						for (EdgeNode ex : edd.getEdges()) {
+							if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+								edgeLimit++;
+							}
+						}
+					}
+					if (edgeLimit >= EDGE_LIMIT) {
+						ofFlow.setDstPort("*");
+						ofFlow.setSrcPort("*");
+					} else {
+						deviceNode.addNode(DeviceNode.Directions.FROM_LOCAL, endpoint, edgeNode);
+					}
+
+
 					ofFlow.setEthType(packet.getEthType());
 					ofFlow.setIpProto(packet.getIpProto());
 					ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
@@ -780,22 +1218,46 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					if (!ofFlow.getSrcPort().equals(Constants.DNS_PORT)) {
 						OFController.getInstance().addFlow(dpId, ofFlow);
 					}
-					deviceNode.addNode(DeviceNode.Directions.FROM_LOCAL, endpoint, edgeNode);
+
 				} else {
 					OFFlow ofFlow = new OFFlow();
-					ofFlow.setSrcMac(packet.getSrcMac());
+					if(isMulticastorBroadcast(packet.getSrcMac())) ofFlow.setSrcMac(packet.getSrcMac());
 					ofFlow.setDstMac(deviceMac);
-					ofFlow.setSrcIp(retreivedNode.getValue().equals(endpoint) ? packet.getSrcIp() : endpoint);
+					ofFlow.setSrcIp(retreivedNode.getValue().equals("*") ? "*" : packet.getSrcIp());
 
-					if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-							&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
-						ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-						ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-						ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-					} else {
+					ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+					boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+							== retreivedNode.getEdges().get(0).getSourcePortEnd();
+					boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+							== retreivedNode.getEdges().get(0).getDestPortEnd();
+
+					if (singleSourcePortValue) {
+						ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
+					}
+
+					if (singleDestPortValue) {
+						ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+					}
+
+					if (!singleDestPortValue && !singleSourcePortValue) {
 						ofFlow.setDstPort(packet.getDstPort());
 						ofFlow.setSrcPort(packet.getSrcPort());
-						ofFlow.setIpProto(packet.getIpProto());
+
+					}
+					//attack rate limit.
+					int edgeLimit = 0;
+					EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_LOCAL
+							, retreivedNode.getValue());
+					if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+						for (EdgeNode ex : edd.getEdges()) {
+							if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+								edgeLimit++;
+							}
+						}
+					}
+					if (edgeLimit >= EDGE_LIMIT) {
+						ofFlow.setDstPort("*");
+						ofFlow.setSrcPort("*");
 					}
 
 					ofFlow.setEthType(packet.getEthType());
@@ -821,7 +1283,7 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 				EndpointNode retreivedNode = deviceNode.getNode(DeviceNode.Directions.FROM_LOCAL, endpoint, edgeNode);
 				if (retreivedNode == null) {
 					OFFlow ofFlow = new OFFlow();
-					ofFlow.setSrcMac(packet.getSrcMac());
+					if(isMulticastorBroadcast(packet.getSrcMac())) ofFlow.setSrcMac(packet.getSrcMac());
 					ofFlow.setDstMac(deviceMac);
 					ofFlow.setSrcIp(packet.getSrcIp());
 					ofFlow.setIcmpCode(packet.getIcmpCode());
@@ -835,9 +1297,9 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 					deviceNode.addNode(DeviceNode.Directions.FROM_LOCAL, endpoint, edgeNode);
 				} else {
 					OFFlow ofFlow = new OFFlow();
-					ofFlow.setSrcMac(packet.getSrcMac());
+					if(isMulticastorBroadcast(packet.getSrcMac())) ofFlow.setSrcMac(packet.getSrcMac());
 					ofFlow.setDstMac(deviceMac);
-					ofFlow.setSrcIp(retreivedNode.getValue().equals(endpoint) ? packet.getSrcIp() : endpoint);
+					ofFlow.setSrcIp(retreivedNode.getValue().equals("*") ? "*" : packet.getSrcIp());
 					ofFlow.setIcmpType(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIcmpType()));
 					ofFlow.setIcmpCode(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIcmpCode()));
 					ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
@@ -851,6 +1313,7 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 			}
 		}
 		//ToLocal
+
 		if (packet.getSrcMac().equals(deviceMac)) {
 			if (!(packet.getEthType().equals(Constants.ETH_TYPE_IPV6) || packet.getEthType().equals(Constants.ETH_TYPE_IPV4)) ) {
 				endpoint = WILDCARD;
@@ -869,32 +1332,75 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 
 					EndpointNode retreivedNode = deviceNode.getNode(DeviceNode.Directions.TO_LOCAL,endpoint, edgeNode);
 					if (retreivedNode == null) {
+
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_LOCAL
+								, endpoint);
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit < EDGE_LIMIT) {
+							deviceNode.addNode(DeviceNode.Directions.TO_LOCAL, endpoint, edgeNode);
+						}
+
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(deviceMac);
-						ofFlow.setDstMac(packet.getDstMac());
-						ofFlow.setDstIp(packet.getDstIp());
-						ofFlow.setDstPort(packet.getDstPort());
+						if(isMulticastorBroadcast(packet.getDstMac())) ofFlow.setDstMac(packet.getDstMac());
+						if (!endpoint.equals("*")) {
+							ofFlow.setDstIp(packet.getDstIp());
+						}
+						if (edgeLimit < EDGE_LIMIT) {
+							ofFlow.setDstPort(packet.getDstPort());
+						}
 						ofFlow.setEthType(packet.getEthType());
 						ofFlow.setIpProto(packet.getIpProto());
 						ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
 						ofFlow.setIdleTimeOut(idleTimeout);
 						OFController.getInstance().addFlow(dpId, ofFlow);
-						deviceNode.addNode(DeviceNode.Directions.TO_LOCAL, endpoint, edgeNode);
 					} else {
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(deviceMac);
-						ofFlow.setDstMac(packet.getDstMac());
-						ofFlow.setDstIp(retreivedNode.getValue().equals(endpoint) ? packet.getDstIp() : endpoint);
-						if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-								&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
-							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-							ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-						} else {
+						if(isMulticastorBroadcast(packet.getDstMac())) ofFlow.setDstMac(packet.getDstMac());
+						ofFlow.setDstIp(retreivedNode.getValue().equals("*") ? "*" : packet.getDstIp());
+						ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+						boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+								== retreivedNode.getEdges().get(0).getSourcePortEnd();
+						boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+								== retreivedNode.getEdges().get(0).getDestPortEnd();
+
+						if (singleSourcePortValue) {
+							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
+						}
+
+						if (singleDestPortValue) {
+							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+						}
+
+						if (!singleDestPortValue && !singleSourcePortValue) {
 							ofFlow.setDstPort(packet.getDstPort());
 							ofFlow.setSrcPort(packet.getSrcPort());
-							ofFlow.setIpProto(packet.getIpProto());
+
+						}
+
+						//attack rate limit.
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_LOCAL
+								, retreivedNode.getValue());
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
 						}
 
 						ofFlow.setEthType(packet.getEthType());
@@ -913,34 +1419,75 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 
 					EndpointNode retreivedNode = deviceNode.getNode(DeviceNode.Directions.TO_LOCAL,endpoint, edgeNode);
 					if (retreivedNode == null) {
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_LOCAL
+								, endpoint);
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit < EDGE_LIMIT) {
+							deviceNode.addNode(DeviceNode.Directions.TO_LOCAL, endpoint, edgeNode);
+						}
+
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(deviceMac);
-						ofFlow.setDstMac(packet.getDstMac());
-						ofFlow.setSrcIp(packet.getDstIp());
-						ofFlow.setSrcPort(packet.getSrcPort());
+						if(isMulticastorBroadcast(packet.getDstMac())) ofFlow.setDstMac(packet.getDstMac());
+						if (!endpoint.equals("*")) {
+							ofFlow.setSrcIp(packet.getDstIp());
+						}
+						if (edgeLimit < EDGE_LIMIT) {
+							ofFlow.setSrcPort(packet.getSrcPort());
+						}
 						ofFlow.setEthType(packet.getEthType());
 						ofFlow.setIpProto(packet.getIpProto());
 						ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
 						ofFlow.setIdleTimeOut(idleTimeout);
 						OFController.getInstance().addFlow(dpId, ofFlow);
-						deviceNode.addNode(DeviceNode.Directions.TO_LOCAL, endpoint, edgeNode);
 					} else {
 						OFFlow ofFlow = new OFFlow();
 						ofFlow.setSrcMac(deviceMac);
-						ofFlow.setDstMac(packet.getDstMac());
-						if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-								&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
-							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-							ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-						} else {
-							ofFlow.setDstPort(packet.getDstPort());
-							ofFlow.setSrcPort(packet.getSrcPort());
-							ofFlow.setIpProto(packet.getIpProto());
+						if(isMulticastorBroadcast(packet.getDstMac())) ofFlow.setDstMac(packet.getDstMac());
+						ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+						boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+								== retreivedNode.getEdges().get(0).getSourcePortEnd();
+						boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+								== retreivedNode.getEdges().get(0).getDestPortEnd();
+
+						if (singleSourcePortValue) {
+							ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
 						}
 
-						ofFlow.setDstIp(retreivedNode.getValue().equals(endpoint) ? packet.getDstIp() : endpoint);
+						if (singleDestPortValue) {
+							ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+						}
+
+						if (!singleDestPortValue && !singleSourcePortValue) {
+							ofFlow.setDstPort(packet.getDstPort());
+							ofFlow.setSrcPort(packet.getSrcPort());
+
+						}
+						//attack rate limit.
+						int edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_LOCAL
+								, retreivedNode.getValue());
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
+						}
+
+						ofFlow.setDstIp(retreivedNode.getValue().equals("*") ? "*" : packet.getDstIp());
 						ofFlow.setEthType(packet.getEthType());
 						ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
 						ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
@@ -951,10 +1498,33 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 				} else {
 					OFFlow ofFlow = new OFFlow();
 					ofFlow.setSrcMac(deviceMac);
-					ofFlow.setDstMac(packet.getDstMac());
+					if(isMulticastorBroadcast(packet.getDstMac())) ofFlow.setDstMac(packet.getDstMac());
 					ofFlow.setDstIp(packet.getDstIp());
 					ofFlow.setSrcPort(packet.getSrcPort());
 					ofFlow.setDstPort(packet.getDstPort());
+
+					int edgeLimit = 0;
+
+					if (packet.getTcpFlag() == SimPacket.Flag.RST_ACK) {
+						//attack rate limit.
+						edgeLimit = 0;
+						EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.FROM_LOCAL
+								, "*");
+						if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+							for (EdgeNode ex : edd.getEdges()) {
+								if (ex.getIpProtocol() == 6) {
+									edgeLimit++;
+								}
+							}
+						}
+						if (edgeLimit >= EDGE_LIMIT) {
+							ofFlow.setDstIp("*");
+							ofFlow.setDstPort("*");
+							ofFlow.setSrcPort("*");
+						}
+					}
+
+
 					ofFlow.setEthType(packet.getEthType());
 					ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
 					ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
@@ -967,7 +1537,6 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 			//udp
 			if ((packet.getEthType().equals(Constants.ETH_TYPE_IPV6) || packet.getEthType().equals(Constants.ETH_TYPE_IPV4)) &&
 					packet.getIpProto().equals(Constants.UDP_PROTO)) {
-
 				EdgeNode edgeNode = new EdgeNode();
 				edgeNode.setSourcePort(Integer.parseInt(packet.getSrcPort()));
 				edgeNode.setDestPort(Integer.parseInt(packet.getDstPort()));
@@ -978,34 +1547,80 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 				if (retreivedNode == null) {
 					OFFlow ofFlow = new OFFlow();
 					ofFlow.setSrcMac(deviceMac);
-					ofFlow.setDstMac(packet.getDstMac());
-					ofFlow.setDstIp(packet.getDstIp());
+					if(isMulticastorBroadcast(packet.getDstMac())) ofFlow.setDstMac(packet.getDstMac());
+					if (!endpoint.equals("*")) {
+						ofFlow.setDstIp(packet.getDstIp());
+					}
 					ofFlow.setSrcPort(packet.getSrcPort());
 					ofFlow.setDstPort(packet.getDstPort());
+
+					//attack rate limit.
+					int edgeLimit = 0;
+					EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_LOCAL
+							, endpoint);
+					if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+						for (EdgeNode ex : edd.getEdges()) {
+							if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+								edgeLimit++;
+							}
+						}
+					}
+					if (edgeLimit >= EDGE_LIMIT) {
+						ofFlow.setDstPort("*");
+						ofFlow.setSrcPort("*");
+					} else {
+						deviceNode.addNode(DeviceNode.Directions.TO_LOCAL, endpoint, edgeNode);
+					}
+
 					ofFlow.setEthType(packet.getEthType());
 					ofFlow.setIpProto(packet.getIpProto());
 					ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
 					ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
 					ofFlow.setIdleTimeOut(idleTimeout);
 					OFController.getInstance().addFlow(dpId, ofFlow);
-					deviceNode.addNode(DeviceNode.Directions.TO_LOCAL, endpoint, edgeNode);
+
 				} else {
 					OFFlow ofFlow = new OFFlow();
 					ofFlow.setSrcMac(deviceMac);
-					ofFlow.setDstMac(packet.getDstMac());
-					ofFlow.setDstIp(retreivedNode.getValue().equals(endpoint) ? packet.getDstIp() : endpoint);
+					if(isMulticastorBroadcast(packet.getDstMac())) ofFlow.setDstMac(packet.getDstMac());
+					ofFlow.setDstIp(retreivedNode.getValue().equals("*") ? "*" : packet.getDstIp());
 
-					if (!(retreivedNode.getEdges().get(0).getDestPort() == -1
-							&& retreivedNode.getEdges().get(0).getSourcePort() == -1)) {
+					ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
+					boolean singleSourcePortValue = retreivedNode.getEdges().get(0).getSourcePortStart()
+							== retreivedNode.getEdges().get(0).getSourcePortEnd();
+					boolean singleDestPortValue = retreivedNode.getEdges().get(0).getDestPortStart()
+							== retreivedNode.getEdges().get(0).getDestPortEnd();
 
-						ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePort()));
-						ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPort()));
-						ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
-					} else {
+					if (singleSourcePortValue) {
+						ofFlow.setSrcPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getSourcePortEnd()));
+					}
+
+					if (singleDestPortValue) {
+						ofFlow.setDstPort(getEdgeNodeValue(retreivedNode.getEdges().get(0).getDestPortEnd()));
+					}
+
+					if (!singleDestPortValue && !singleSourcePortValue) {
 						ofFlow.setDstPort(packet.getDstPort());
 						ofFlow.setSrcPort(packet.getSrcPort());
-						ofFlow.setIpProto(packet.getIpProto());
+
 					}
+
+					//attack rate limit.
+					int edgeLimit = 0;
+					EndpointNode edd = deviceNode.getEndpointNode(DeviceNode.Directions.TO_LOCAL
+							, retreivedNode.getValue());
+					if (edd != null && edd.getEdges().size() >= EDGE_LIMIT) {
+						for (EdgeNode ex : edd.getEdges()) {
+							if (ex.getIpProtocol() == edgeNode.getIpProtocol()) {
+								edgeLimit++;
+							}
+						}
+					}
+					if (edgeLimit >= EDGE_LIMIT) {
+						ofFlow.setDstPort("*");
+						ofFlow.setSrcPort("*");
+					}
+
 					ofFlow.setEthType(packet.getEthType());
 					ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
 					ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
@@ -1028,7 +1643,7 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 				if (retreivedNode == null) {
 					OFFlow ofFlow = new OFFlow();
 					ofFlow.setSrcMac(deviceMac);
-					ofFlow.setDstMac(packet.getDstMac());
+					if(isMulticastorBroadcast(packet.getDstMac())) ofFlow.setDstMac(packet.getDstMac());
 					ofFlow.setDstIp(packet.getDstIp());
 					ofFlow.setIcmpCode(packet.getIcmpCode());
 					ofFlow.setIcmpType(packet.getIcmpType());
@@ -1042,8 +1657,8 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 				} else {
 					OFFlow ofFlow = new OFFlow();
 					ofFlow.setSrcMac(deviceMac);
-					ofFlow.setDstMac(packet.getDstMac());
-					ofFlow.setDstIp(retreivedNode.getValue().equals(endpoint) ? packet.getDstIp() : endpoint);
+					if(isMulticastorBroadcast(packet.getDstMac())) ofFlow.setDstMac(packet.getDstMac());
+					ofFlow.setDstIp(retreivedNode.getValue().equals("*") ? "*" : packet.getDstIp());
 					ofFlow.setIcmpType(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIcmpType()));
 					ofFlow.setIcmpCode(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIcmpCode()));
 					ofFlow.setIpProto(getEdgeNodeValue(retreivedNode.getEdges().get(0).getIpProtocol()));
@@ -1065,7 +1680,7 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 			if (retreivedNode == null) {
 				OFFlow ofFlow = new OFFlow();
 				ofFlow.setSrcMac(deviceMac);
-				ofFlow.setDstMac(packet.getDstMac());
+				if(isMulticastorBroadcast(packet.getDstMac())) ofFlow.setDstMac(packet.getDstMac());
 				ofFlow.setEthType(packet.getEthType());
 				if (packet.getIpProto() != null && !packet.getIpProto().equals("*")) {
 					ofFlow.setIpProto(packet.getIpProto());
@@ -1081,8 +1696,8 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 				if (packet.getIpProto() != null && !packet.getIpProto().equals("*")) {
 					ofFlow.setIpProto("" + retreivedNode.getEdges().get(0).getIpProtocol());
 				}
-				ofFlow.setDstMac(packet.getDstMac());
-				ofFlow.setDstIp(retreivedNode.getValue().equals(endpoint) ? packet.getDstIp() : endpoint);
+				if(isMulticastorBroadcast(packet.getDstMac())) ofFlow.setDstMac(packet.getDstMac());
+				ofFlow.setDstIp(retreivedNode.getValue().equals("*") ? "*" : packet.getDstIp());
 				ofFlow.setEthType(packet.getEthType());
 				ofFlow.setPriority(REACTIVE_LOCAL_FLOW_PRIORITY);
 				ofFlow.setOfAction(OFFlow.OFAction.NORMAL);
