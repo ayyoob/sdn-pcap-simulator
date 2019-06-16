@@ -145,7 +145,7 @@ public class LegacyDeviceFlowOptimizer implements StatListener {
             return;
         }
         summerizationTimeInMillis = ((Long) jsonObject.get("summerizationTimeInSeconds")) * 1000;
-        dpId = (String) jsonObject.get("dpId");
+        dpId = (String) jsonObject.get("gatewayMac");
         deviceMac = (String) jsonObject.get("device");
         deviceName = (String) jsonObject.get("deviceName");
         String val = (String) jsonObject.get("compareDevices");

@@ -46,7 +46,7 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 
 		gatewayIp = (String) jsonObject.get("gatewayIp");
 		gatewayIpv6 = (String) jsonObject.get("gatewayIpv6");
-		dpId = (String) jsonObject.get("dpId");
+		dpId = (String) jsonObject.get("gatewayMac");
 
 
 		OFFlow ofFlow = new OFFlow();

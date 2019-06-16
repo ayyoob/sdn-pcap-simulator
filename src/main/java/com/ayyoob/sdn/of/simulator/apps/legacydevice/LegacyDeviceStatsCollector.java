@@ -52,7 +52,7 @@ public class LegacyDeviceStatsCollector implements StatListener {
         graphPrint = (Boolean) jsonObject.get("graphPrint");
         String filePostFix = (String) jsonObject.get("filePostFix");
         summerizationTimeInMillis = ((Long) jsonObject.get("summerizationTimeInSeconds")) * 1000;
-        dpId = (String) jsonObject.get("dpId");
+        dpId = (String) jsonObject.get("gatewayMac");
         deviceMac = (String) jsonObject.get("device");
         String currentPath = Paths.get(".").toAbsolutePath().normalize().toString();
 

@@ -102,7 +102,7 @@
             "deviceMac" : "e0:a7:00:02:44:1b",
             "gatewayIp" : "192.168.1.1",
             "gatewayIpv6" : "fe80:0:0:0:16cc:20ff:fe51:33ea",
-            "dpId":"14:cc:20:51:33:ea",
+            "gatewayMac":"14:cc:20:51:33:ea",
             "idleTimeoutInSeconds": 60
         },
 
@@ -110,7 +110,7 @@
             "enabled": true,
             "summerizationTimeInSeconds": 60,
             "device" : "e0:a7:00:02:44:1b",
-            "dpId":"14:cc:20:51:33:ea",
+            "gatewayMac":"14:cc:20:51:33:ea",
             "filePostFix": "60",
             "graphPrint": false
         },
@@ -121,7 +121,7 @@
             "device" : "e0:a7:00:02:44:1b",
             "deviceName" : "belkincameraMud",
             "compareDevices": "",
-            "dpId":"14:cc:20:51:33:ea",
+            "gatewayMac":"14:cc:20:51:33:ea",
             "profiles":"/Users/ayyoobhamza/Desktop/unsw/4-legacydevice/mudProfiles/new"
         }
     },

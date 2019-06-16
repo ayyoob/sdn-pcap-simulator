@@ -60,7 +60,7 @@ An event will be triggered each time a packet is being being inspected. The impl
                  "deviceMac" : "e0:a7:00:02:44:1b",
                  "gatewayIp" : "192.168.1.1",
                  "gatewayIpv6" : "fe80:0:0:0:16cc:20ff:fe51:33ea",
-                 "dpId":"14:cc:20:51:33:ea",
+                 "gatewayMac":"14:cc:20:51:33:ea",
                  "idleTimeoutInSeconds": 60
              }
          }"
