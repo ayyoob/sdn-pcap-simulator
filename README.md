@@ -32,11 +32,6 @@ simulator-config in https://github.com/ayyoob/sdn-pcap-simulator/blob/master/src
 
 Location of the traffic trace.
 
-    "deviceConfig":{ "device":"00:24:e4:20:28:c3", "deviceName": "augustdoorbellcam" }
- device" : Mac address of the device that we monitor to generate the MUD for.
- 
- deviceName": name that appears on the MUD profile.
-
     "switchConfig": { "macAddress" : "14:cc:20:51:33:ea", "ipAddress": "192.168.1.1", "ipv6Address": "fe80:0:0:0:16cc:20ff:fe51:33ea" }
 
 In order to capture device to Internet communication, we require the default gateway details. Therefore mac address, IP addresses of the default gateway has to be given through the config. 
