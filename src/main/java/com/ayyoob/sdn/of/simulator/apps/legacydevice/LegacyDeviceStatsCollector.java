@@ -71,7 +71,7 @@ public class LegacyDeviceStatsCollector implements StatListener {
     }
 
     @Override
-    public void process(String dpId, SimPacket packet) {
+    public void process(String dpId, long timestamp) {
         if (!enabled) {
             return;
         }
@@ -81,12 +81,12 @@ public class LegacyDeviceStatsCollector implements StatListener {
 
         long nextLogTime = 0;
         if (lastLogTime == 0) {
-            lastLogTime = packet.getTimestamp();
+            lastLogTime = timestamp;
             return;
         }
         nextLogTime = lastLogTime + summerizationTimeInMillis;
 
-        long currentTime = packet.getTimestamp();
+        long currentTime = timestamp;
         if (currentTime >= nextLogTime) {
             lastLogTime = currentTime;
             flowCounterdata.add(currentTime + "," + getDeviceFlowsSize());

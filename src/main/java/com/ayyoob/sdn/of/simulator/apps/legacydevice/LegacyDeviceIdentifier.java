@@ -47,6 +47,8 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 		gatewayIp = (String) jsonObject.get("gatewayIp");
 		gatewayIpv6 = (String) jsonObject.get("gatewayIpv6");
 		dpId = (String) jsonObject.get("dpId");
+
+
 		OFFlow ofFlow = new OFFlow();
 		ofFlow.setEthType(Constants.ETH_TYPE_IPV4);
 		ofFlow.setIpProto(Constants.ICMP_PROTO);
@@ -1705,8 +1707,6 @@ public class LegacyDeviceIdentifier implements ControllerApp {
 				OFController.getInstance().addFlow(dpId, ofFlow);
 			}
 			return;
-
-
 		}
 
 	}

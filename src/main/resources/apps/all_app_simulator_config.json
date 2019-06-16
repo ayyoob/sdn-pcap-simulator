@@ -1,0 +1,133 @@
+{
+    "modules": [
+        "com.ayyoob.sdn.of.simulator.apps.device.flow.builder.IoTDeviceFlowBuilder",
+        "com.ayyoob.sdn.of.simulator.apps.device.flow.builder.IoTDeviceFlowBuilderWithRate",
+        "com.ayyoob.sdn.of.simulator.apps.dns.monitor.IoTDNSWorkerSetApp",
+        "com.ayyoob.sdn.of.simulator.apps.device.flow.builder.IoTDeviceFlowBuilderWithRateWithIPs",
+        "com.ayyoob.sdn.of.simulator.apps.device.flow.builder.MUDBasedIoTDeviceFlowBuilder",
+        "com.ayyoob.sdn.of.simulator.apps.mud.deployer.MUDFlowDeployer",
+        "com.ayyoob.sdn.of.simulator.apps.mud.deployer.MudieFlowDeployer",
+        "com.ayyoob.sdn.of.simulator.apps.legacydevice.LegacyDeviceIdentifier"
+    ],
+
+    "statModules": [
+        "com.ayyoob.sdn.of.simulator.apps.flow.collector.SingleSwitchStatsCollector",
+        "com.ayyoob.sdn.of.simulator.apps.flow.collector.MudBasedSingleSwitchStatsCollector",
+        "com.ayyoob.sdn.of.simulator.apps.mud.deployer.MudieStatsCollector",
+        "com.ayyoob.sdn.of.simulator.apps.legacydevice.LegacyDeviceStatsCollector",
+        "com.ayyoob.sdn.of.simulator.apps.legacydevice.LegacyDeviceFlowOptimizer"
+    ],
+
+    "switchConfig": {
+        "dpId" : "14:cc:20:51:33:ea",
+        "macAddress": "14:cc:20:51:33:ea",
+        "ipAddress": "192.168.1.1"
+    },
+
+    "logPacket":false,
+
+    "moduleConfig": {
+        "IoTDeviceFlowBuilder": {
+            "isIoTDeviceFlowBuilderEnable": false,
+            "devices":["EC:1A:59:79:F4:89"]
+        },
+
+        "IoTDeviceFlowBuilderWithRate":{
+            "isIoTDeviceFlowBuilderEnable": false,
+            "devices":["00:17:88:2b:9a:25"]
+        },
+
+        "IoTDeviceFlowBuilderWithRateWithIPs":{
+            "isIoTDeviceFlowBuilderEnable": false,
+            "devices":["e0:76:d0:3f:00:ae"]
+        },
+
+        "MUDBasedIoTDeviceFlowBuilder":{
+            "enable": false,
+            "devices":["b4:75:0e:ec:e5:a9"]
+        },
+
+        "IoTDNSWorkerSetApp": {
+            "enabled": false,
+            "device":"70:ee:50:18:34:43",
+            "gateway":"14:CC:20:51:33:EA"
+        },
+
+        "MUDFlowDeployer":{
+            "enable": false,
+            "deviceMac" : "7c:70:bc:5d:5e:dc",
+            "gatewayIp" : "192.168.1.1",
+            "dpId":"14:cc:20:51:33:ea",
+            "idleTimeoutInSeconds": 7200,
+            "mudPath": "/Users/ayyoobhamza/Desktop/unsw/mud/git/MUDpolicy/data/MUDspec/",
+            "devices": "44:65:0d:56:cc:d3,amazonEchoMud.json|e0:76:d0:3f:00:ae,augustdoorbellcamMud.json|70:88:6b:10:0f:c6,awairAirQualityMud.json|b4:75:0e:ec:e5:a9,belkincameraMud.json|74:6a:89:00:2e:25,blipcareBPmeterMud.json|7c:70:bc:5d:5e:dc,canaryCameraMud.json|6c:ad:f8:5e:e4:61,chromecastMud.json|30:8c:fb:2f:e4:b2,dropcamMud.json|28:c2:dd:ff:a5:2d,hellobarbieMud.json|70:5a:0f:e4:9b:c0,hpprinterMud.json|00:17:88:2b:9a:25,HueBulbMud.json|74:c6:3b:29:d7:1d,ihomepowerplugMud.json|d0:73:d5:01:83:08,lifxbulbMud.json|18:b4:30:25:be:e4,nestsmokesensorMud.json|70:ee:50:18:34:43,NetatmoCameraMud.json|70:ee:50:03:b8:ac,NetatmoWeatherStationMud.json|e0:76:d0:33:bb:85,pixstarphotoframeMud.json|88:4a:ea:31:66:9d,ringdoorbellMud.json|00:16:6c:ab:6b:88,samsungsmartcamMud.json|d0:52:a8:00:67:5e,SmartThingsMud.json|f4:f2:6d:93:51:f1,tplinkcameraMud.json|50:c7:bf:00:56:39,tplinkplugMud.json|18:b7:9e:02:20:44,tribyspeakerMud.json|ec:1a:59:79:50:1d,wemomotionMud.json|ec:1a:59:83:28:11,wemomotionMud.json|ec:1a:59:7a:02:c5,wemoswitchMud.json|ec:1a:59:79:f4:89,wemoswitchMud.json|00:24:e4:10:ee:4c,withingsbabymonitorMud.json|00:24:e4:1b:6f:96,withingsscaleMud.json|00:24:e4:20:28:c6,withingssleepsensorMud.json"
+        },
+
+        "SingleSwitchStatsCollector": {
+            "enabled": false,
+            "summerizationTimeInSeconds": 60,
+            "dpId":"14:cc:20:51:33:ea",
+            "filename":"00166CAB6B88"
+        },
+
+        "MudBasedSingleSwitchStatsCollector": {
+            "enabled": false,
+            "summerizationTimeInSeconds": 60,
+            "device" : "7c:70:bc:5d:5e:dc",
+            "dpId":"14:cc:20:51:33:ea",
+            "filePostFix": "7200"
+        },
+
+        "MudieStatsCollector": {
+            "enabled": false,
+            "summerizationTimeInSeconds": 60,
+            "deviceMac" : "50:c7:bf:00:56:39",
+            "gatewayIp" : "192.168.1.1",
+            "dpId":"14:cc:20:51:33:ea",
+            "mudPath": "/Users/ayyoobhamza/Desktop/unsw/mud/git/MUDpolicy/data/MUDspec/tplinkplugMud.json"
+        },
+
+        "MudieFlowDeployer": {
+            "enable": false,
+            "deviceMac" : "ec:1a:59:83:28:11",
+            "gatewayIp" : "192.168.1.1",
+            "dpId":"14:cc:20:51:33:ea",
+            "idleTimeoutInSeconds": 7200,
+            "mudPath": "/Users/ayyoobhamza/Desktop/unsw/mud/git/MUDpolicy/data/MUDspec/",
+            "devices": "44:65:0d:56:cc:d3,amazonEchoMud.json|e0:76:d0:3f:00:ae,augustdoorbellcamMud.json|70:88:6b:10:0f:c6,awairAirQualityMud.json|b4:75:0e:ec:e5:a9,belkincameraMud.json|74:6a:89:00:2e:25,blipcareBPmeterMud.json|7c:70:bc:5d:5e:dc,canaryCameraMud.json|6c:ad:f8:5e:e4:61,chromecastMud.json|30:8c:fb:2f:e4:b2,dropcamMud.json|28:c2:dd:ff:a5:2d,hellobarbieMud.json|70:5a:0f:e4:9b:c0,hpprinterMud.json|00:17:88:2b:9a:25,HueBulbMud.json|74:c6:3b:29:d7:1d,ihomepowerplugMud.json|d0:73:d5:01:83:08,lifxbulbMud.json|18:b4:30:25:be:e4,nestsmokesensorMud.json|70:ee:50:18:34:43,NetatmoCameraMud.json|70:ee:50:03:b8:ac,NetatmoWeatherStationMud.json|e0:76:d0:33:bb:85,pixstarphotoframeMud.json|88:4a:ea:31:66:9d,ringdoorbellMud.json|00:16:6c:ab:6b:88,samsungsmartcamMud.json|d0:52:a8:00:67:5e,SmartThingsMud.json|f4:f2:6d:93:51:f1,tplinkcameraMud.json|50:c7:bf:00:56:39,tplinkplugMud.json|18:b7:9e:02:20:44,tribyspeakerMud.json|ec:1a:59:79:50:1d,wemomotionMud.json|ec:1a:59:83:28:11,wemomotionMud.json|ec:1a:59:7a:02:c5,wemoswitchMud.json|ec:1a:59:79:f4:89,wemoswitchMud.json|00:24:e4:10:ee:4c,withingsbabymonitorMud.json|00:24:e4:1b:6f:96,withingsscaleMud.json|00:24:e4:20:28:c6,withingssleepsensorMud.json"
+        },
+
+        "LegacyDeviceIdentifier": {
+            "enable": true,
+            "deviceMac" : "e0:a7:00:02:44:1b",
+            "gatewayIp" : "192.168.1.1",
+            "gatewayIpv6" : "fe80:0:0:0:16cc:20ff:fe51:33ea",
+            "dpId":"14:cc:20:51:33:ea",
+            "idleTimeoutInSeconds": 60
+        },
+
+        "LegacyDeviceStatsCollector": {
+            "enabled": true,
+            "summerizationTimeInSeconds": 60,
+            "device" : "e0:a7:00:02:44:1b",
+            "dpId":"14:cc:20:51:33:ea",
+            "filePostFix": "60",
+            "graphPrint": false
+        },
+
+        "LegacyDeviceFlowOptimizer": {
+            "enabled": true,
+            "summerizationTimeInSeconds": 900,
+            "device" : "e0:a7:00:02:44:1b",
+            "deviceName" : "belkincameraMud",
+            "compareDevices": "",
+            "dpId":"14:cc:20:51:33:ea",
+            "profiles":"/Users/ayyoobhamza/Desktop/unsw/4-legacydevice/mudProfiles/new"
+        }
+    },
+
+    "pcapLocation": "/Users/ayyoobhamza/Desktop/test/old/e0a70002441b.pcap",
+
+    "inspectFileWrite": false,
+    "inspectFileName": "old.pcap"
+}

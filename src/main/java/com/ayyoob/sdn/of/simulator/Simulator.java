@@ -28,7 +28,13 @@ public class Simulator {
 
         JSONParser parser = new JSONParser();
         ClassLoader classLoader = Simulator.class.getClassLoader();
-        File file = new File(classLoader.getResource("apps/simulator_config.json").getFile());
+        File file;
+        if (args != null && args.length > 0&& args[0] != null && args[0].length() >0) {
+            file = new File(args[0]);
+        } else {
+            file = new File(classLoader.getResource("apps/simulator_config.json").getFile());
+        }
+
         Object obj = parser.parse(new FileReader(file));
 
         JSONObject jsonObject = (JSONObject) obj;
@@ -44,7 +50,7 @@ public class Simulator {
         }
         inspectPcapFileName = currentPath + File.separator + "result" + File.separator + inspectPcapFileName;
         JSONObject switchConfig = (JSONObject) jsonObject.get("switchConfig");
-        String dpId = (String) switchConfig.get("dpId");
+        String dpId = (String) switchConfig.get("macAddress");
         String macAddress = (String) switchConfig.get("macAddress");
         String ipAddress = (String) switchConfig.get("ipAddress");
 
@@ -80,8 +86,11 @@ public class Simulator {
 
             OFController.getInstance().registerStatListeners(statListener, arg);
         }
-
-        processPcap(pcapLocation, ofSwitch, inspectFileWrite, inspectPcapFileName);
+        if (!pcapLocation.isEmpty()) {
+            processPcap(pcapLocation, ofSwitch, inspectFileWrite, inspectPcapFileName);
+        } else {
+            System.out.println("Please configure the pcap and all necessary configuration.");
+        }
         OFController.getInstance().complete();
         OFController.getInstance().printStats();
     }

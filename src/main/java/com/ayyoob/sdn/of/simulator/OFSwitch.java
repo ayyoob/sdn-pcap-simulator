@@ -22,7 +22,7 @@ public class OFSwitch {
         }
         cleanIdleFlows();
         for (StatListener statListener : OFController.getInstance().getStatListeners()) {
-            statListener.process(dpid, packet);
+            statListener.process(dpid, packet.getTimestamp());
         }
         OFFlow flow = getMatchingFlow(packet);
         if (flow.getOfAction() == OFFlow.OFAction.MIRROR_TO_CONTROLLER) {

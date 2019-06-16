@@ -7,7 +7,7 @@ public interface StatListener {
 
     void init(JSONObject jsonObject);
 
-    void process(String dpId, SimPacket packet);
+    void process(String dpId, long timestamp);
 
     void complete();
 }

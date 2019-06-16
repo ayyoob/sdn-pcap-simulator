@@ -3,11 +3,9 @@ package com.ayyoob.sdn.of.simulator.apps.legacydevice;
 import com.ayyoob.sdn.of.simulator.Constants;
 import com.ayyoob.sdn.of.simulator.OFController;
 import com.ayyoob.sdn.of.simulator.OFFlow;
-import com.ayyoob.sdn.of.simulator.SimPacket;
 import com.ayyoob.sdn.of.simulator.apps.StatListener;
-import com.ayyoob.sdn.of.simulator.processor.mud.*;
+import com.ayyoob.sdn.of.simulator.apps.legacydevice.processor.mud.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.javafx.geom.Edge;
 import org.json.simple.JSONObject;
 
 import java.io.*;
@@ -265,7 +263,7 @@ public class LegacyDeviceFlowOptimizer implements StatListener {
 
 
     @Override
-    public void process(String dpId, SimPacket packet) {
+    public void process(String dpId, long timestamp) {
         if (!enabled) {
             return;
         }
@@ -275,12 +273,12 @@ public class LegacyDeviceFlowOptimizer implements StatListener {
 
         long nextLogTime = 0;
         if (lastLogTime == 0) {
-            lastLogTime = packet.getTimestamp();
+            lastLogTime = timestamp;
             return;
         }
         nextLogTime = lastLogTime + summerizationTimeInMillis;
 
-        long currentTime = packet.getTimestamp();
+        long currentTime = timestamp;
         if (currentTime >= nextLogTime) {
             lastLogTime = currentTime;
             //start computing
@@ -668,7 +666,7 @@ public class LegacyDeviceFlowOptimizer implements StatListener {
     }
 
 
-
+//O([ed * mlog(ed)]) => O([n * mlog(n)])
     private String[] calculateLayerVariations(DeviceNode.Directions directions[]) {
 
         DeviceNode generatedNode = LegacyDeviceIdentifier.deviceNode;
@@ -1640,7 +1638,7 @@ public class LegacyDeviceFlowOptimizer implements StatListener {
         return optimalDeviceNode;
     }
 
-
+    //O(ed)
     private DeviceNode findOptimalStructure(DeviceNode deviceNode, DeviceNode mud) {
         DeviceNode structuredNode = new DeviceNode(deviceNode.value + "tmp");
 

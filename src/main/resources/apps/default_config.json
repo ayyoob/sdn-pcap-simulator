@@ -10,7 +10,7 @@
 
     "moduleConfig": {
         "LegacyDeviceIdentifier": {
-            "enable": true,
+            "enable": false,
             "deviceMac" : "e0:a7:00:02:44:1b",
             "gatewayIp" : "192.168.1.1",
             "gatewayIpv6" : "fe80:0:0:0:16cc:20ff:fe51:33ea",
@@ -19,7 +19,7 @@
         },
 
         "LegacyDeviceStatsCollector": {
-            "enabled": true,
+            "enabled": false,
             "summerizationTimeInSeconds": 60,
             "device" : "e0:a7:00:02:44:1b",
             "dpId":"14:cc:20:51:33:ea",
@@ -28,7 +28,7 @@
         },
 
         "LegacyDeviceFlowOptimizer": {
-            "enabled": true,
+            "enabled": false,
             "summerizationTimeInSeconds": 900,
             "device" : "e0:a7:00:02:44:1b",
             "deviceName" : "belkincameraMud",
@@ -44,7 +44,7 @@
     },
 
     "logPacket":false,
-    "pcapLocation": "/Users/ayyoobhamza/Desktop/test/old/a0a70002441b.pcap",
+    "pcapLocation": "",
 
     "inspectFileWrite": false,
     "inspectFileName": "out.pcap"
