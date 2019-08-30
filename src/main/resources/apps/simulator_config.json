@@ -1,16 +1,15 @@
 {
     "modules": [
-        "com.ayyoob.sdn.of.simulator.apps.legacydevice.LegacyDeviceIdentifier"
+        "com.ayyoob.sdn.of.simulator.apps.attackdetector.MudAttackDetector"
     ],
 
     "statModules": [
-        "com.ayyoob.sdn.of.simulator.apps.legacydevice.LegacyDeviceStatsCollector",
-        "com.ayyoob.sdn.of.simulator.apps.legacydevice.LegacyDeviceFlowOptimizer"
+        "com.ayyoob.sdn.of.simulator.apps.attackdetector.MudAttackDetector"
     ],
 
     "moduleConfig": {
         "LegacyDeviceIdentifier": {
-            "enable": true,
+            "enable": false,
             "deviceMac" : "e0:a7:00:02:44:1b",
             "gatewayIp" : "192.168.1.1",
             "gatewayIpv6" : "fe80:0:0:0:16cc:20ff:fe51:33ea",
@@ -19,7 +18,7 @@
         },
 
         "LegacyDeviceStatsCollector": {
-            "enabled": true,
+            "enabled": false,
             "summerizationTimeInSeconds": 60,
             "device" : "e0:a7:00:02:44:1b",
             "gatewayMac":"14:cc:20:51:33:ea",
@@ -28,13 +27,23 @@
         },
 
         "LegacyDeviceFlowOptimizer": {
-            "enabled": true,
+            "enabled": false,
             "summerizationTimeInSeconds": 900,
             "device" : "e0:a7:00:02:44:1b",
             "deviceName" : "belkincameraMud",
             "compareDevices": "",
             "gatewayMac":"14:cc:20:51:33:ea",
             "profiles":"/Users/ayyoobhamza/Desktop/unsw/4-legacydevice/mudProfiles/new"
+        },
+
+        "MudAttackDetector": {
+            "enabled": true,
+            "device" : "e0:a7:00:02:44:1b",
+            "deviceMac" : "ec:1a:59:83:28:11",
+            "gatewayIp" : "192.168.1.1",
+            "dpId":"14:cc:20:51:33:ea",
+            "mud":"/Users/ayyoobhamza/Desktop/unsw/6-machineoptimize/profiles/HueBulbMud.json",
+            "ipListFile":"/Users/ayyoobhamza/Desktop/unsw/6-machineoptimize/iplist.csv"
         }
     },
 
@@ -43,7 +52,7 @@
         "ipAddress": "192.168.1.1"
     },
 
-    "logPacket":false,
+    "logPacket":true,
     "pcapLocation": "/Users/ayyoobhamza/Desktop/test/old/a0a70002441b.pcap",
 
     "inspectFileWrite": false,
