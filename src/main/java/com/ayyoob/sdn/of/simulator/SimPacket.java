@@ -173,6 +173,12 @@ public class SimPacket {
                 + "," + ipProto + "," + srcPort + "," + dstPort + "," + icmpCode + "," + icmpType + "," + timestamp;
     }
 
+
+    public String getPacketInfoWithoutStas() {
+        return srcMac + "," + dstMac + "," + ethType + ",*," + srcIp + "," + dstIp + ","
+                + ipProto + "," + srcPort + "," + dstPort + "," + 11 + "," + icmpType + "," + icmpCode ;
+    }
+
     public String getIcmpType() {
         return icmpType;
     }

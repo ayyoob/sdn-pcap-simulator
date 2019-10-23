@@ -10,9 +10,7 @@ import org.pcap4j.packet.*;
 import org.pcap4j.packet.namednumber.EtherType;
 import org.pcap4j.packet.namednumber.IpNumber;
 
-import java.io.EOFException;
-import java.io.File;
-import java.io.FileReader;
+import java.io.*;
 import java.lang.reflect.Constructor;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -20,26 +18,25 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
-public class Simulator {
+public class WormEntropyChangeDetectSimulator {
 
+    private static String devicedetails =
+            "ec:1a:59:79:f4:89,wemoswitchMud.json,wemoswitch";
+    private static String POST_FIX = "_ipport";
+//    private static String POST_FIX = "_portAttack";
+    private static boolean attackDetect = true;
     public static void main(String[] args) throws Exception {
 
         System.out.println("Working Directory is set to:" + Paths.get(".").toAbsolutePath().normalize().toString());
 
         JSONParser parser = new JSONParser();
-        ClassLoader classLoader = Simulator.class.getClassLoader();
-        File file;
-        if (args != null && args.length > 0 && args[0] != null && args[0].length() >0) {
-            file = new File(args[0]);
-        } else {
-            file = new File(classLoader.getResource("apps/simulator_config.json").getFile());
-        }
-
+        ClassLoader classLoader = WormEntropyChangeDetectSimulator.class.getClassLoader();
+        File file = new File(classLoader.getResource("apps/simulator_config.json").getFile());
         Object obj = parser.parse(new FileReader(file));
 
         JSONObject jsonObject = (JSONObject) obj;
 
-        String pcapLocation = (String) jsonObject.get("pcapLocation");
+        String pcapLocation = "/Users/ayyoobhamza/Desktop/unsw/6-machineoptimize/pcap/worm/wormAttackForWemo/";
         boolean inspectFileWrite = (boolean) jsonObject.get("inspectFileWrite");
         String inspectPcapFileName = (String) jsonObject.get("inspectFileName");
         String currentPath = Paths.get(".").toAbsolutePath().normalize().toString();
@@ -56,47 +53,104 @@ public class Simulator {
 
         JSONArray modules = (JSONArray) jsonObject.get("modules");
         JSONObject moduleConfig = (JSONObject) jsonObject.get("moduleConfig");
-        Iterator<String> iterator = modules.iterator();
+
         final OFSwitch ofSwitch = new OFSwitch(dpId, macAddress, ipAddress);
-        OFController.getInstance().addSwitch(ofSwitch);
 
-        while (iterator.hasNext()) {
-            String fqClassName = iterator.next();
-            String spilitClassName[] = fqClassName.split("\\.");
-            String className = spilitClassName[spilitClassName.length-1];
-            JSONObject arg = (JSONObject) moduleConfig.get(className);
 
-            Class<?> clazz = Class.forName(fqClassName);
-            Constructor<?> ctor = clazz.getConstructor();
-            ControllerApp controllerApp = (ControllerApp) ctor.newInstance();
+        for (String dt : devicedetails.split("\n")) {
+            OFController.getInstance().addSwitch(ofSwitch);
+            String deviceMac = dt.split(",")[0];
+            String mudName = dt.split(",")[1];
+//            String folderName = dt.split(",")[2].replace(".json", "");
+            String newPcapLocation = pcapLocation + deviceMac.replace(":", "") + POST_FIX + ".pcap";
+            Iterator<String> iterator = modules.iterator();
+            while (iterator.hasNext()) {
+                String fqClassName = iterator.next();
+                String spilitClassName[] = fqClassName.split("\\.");
+                String className = spilitClassName[spilitClassName.length-1];
+                JSONObject arg = (JSONObject) moduleConfig.get(className);
+                arg.remove("device");
+                arg.remove("mud");
+                arg.put("mud", "/Users/ayyoobhamza/Desktop/unsw/6-machineoptimize/profiles/" + mudName);
+                arg.put("device", deviceMac);
+                arg.put("attackDetect", attackDetect);
 
-            OFController.getInstance().registerApps(controllerApp, arg);
+                Class<?> clazz = Class.forName(fqClassName);
+                Constructor<?> ctor = clazz.getConstructor();
+                ControllerApp controllerApp = (ControllerApp) ctor.newInstance();
+
+                OFController.getInstance().registerApps(controllerApp, arg);
+            }
+            JSONArray statModules = (JSONArray) jsonObject.get("statModules");
+            iterator = statModules.iterator();
+            while (iterator.hasNext()) {
+                String fqClassName = iterator.next();
+                String spilitClassName[] = fqClassName.split("\\.");
+                String className = spilitClassName[spilitClassName.length-1];
+                JSONObject arg = (JSONObject) moduleConfig.get(className);
+                arg.remove("device");
+                arg.remove("mud");
+                arg.put("attackDetect", attackDetect);
+                arg.put("mud", "/Users/ayyoobhamza/Desktop/unsw/6-machineoptimize/profiles/" + mudName);
+                arg.put("device", deviceMac);
+
+                Class<?> clazz = Class.forName(fqClassName);
+                Constructor<?> ctor = clazz.getConstructor();
+                StatListener statListener = (StatListener) ctor.newInstance();
+
+                OFController.getInstance().registerStatListeners(statListener, arg);
+            }
+
+            long pktcount= processPcap(newPcapLocation, ofSwitch, inspectFileWrite, inspectPcapFileName);
+            OFController.getInstance().complete();
+            String stats = OFController.getInstance().getStats() + "\n totalPacketCount: " + pktcount;
+            OFController.getInstance().removeApps();
+            OFController.getInstance().removeStatsListener();
+            OFController.getInstance().removeSwitch();
+            ofSwitch.clearAllFlows();
+
+            String flowfilename = currentPath + File.separator + "result" + File.separator + deviceMac.replace(":",
+                    "") +
+                    "perfstats.csv";
+            try{
+                FileWriter fw=new FileWriter(flowfilename);
+                fw.write(stats);
+                fw.close();
+            }catch(Exception e){System.out.println(e);}
+
+            File f = new File(currentPath + File.separator + "result" + File.separator +
+                    "EntropyChange" + File.separator + deviceMac
+                    .replace(":", "") + POST_FIX);
+            File currDir = new File(currentPath + File.separator + "result");
+            if (!f.exists()) {
+                f.mkdir();
+                move(f, currDir);
+            }
+
+
         }
-        JSONArray statModules = (JSONArray) jsonObject.get("statModules");
-        iterator = statModules.iterator();
-        while (iterator.hasNext()) {
-            String fqClassName = iterator.next();
-            String spilitClassName[] = fqClassName.split("\\.");
-            String className = spilitClassName[spilitClassName.length-1];
-            JSONObject arg = (JSONObject) moduleConfig.get(className);
 
-            Class<?> clazz = Class.forName(fqClassName);
-            Constructor<?> ctor = clazz.getConstructor();
-            StatListener statListener = (StatListener) ctor.newInstance();
 
-            OFController.getInstance().registerStatListeners(statListener, arg);
-        }
-        if (!pcapLocation.isEmpty()) {
-            processPcap(pcapLocation, ofSwitch, inspectFileWrite, inspectPcapFileName);
-        } else {
-            System.out.println("Please configure the pcap and all necessary configuration.");
-        }
-        OFController.getInstance().complete();
-        OFController.getInstance().printStats();
     }
 
-    private static void processPcap(String pcapLocation, OFSwitch ofSwitch, boolean inspectFileWrite, String inspectPcapFileName
-                                    ) throws PcapNativeException, NotOpenException {
+    private static void move(File toDir, File currDir) {
+        File[] files = currDir.listFiles(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                if (name.contains(".txt") || name.contains(".csv")) {
+                    return true;
+                }
+                return false;
+            }
+        });
+        for (File file : files){
+            file.renameTo(new File(toDir, file.getName()));
+        }
+    }
+
+    private static long processPcap(String pcapLocation, OFSwitch ofSwitch, boolean inspectFileWrite, String
+            inspectPcapFileName
+    ) throws PcapNativeException, NotOpenException {
         boolean firstPacket = false;
         long startTimestamp = 0;
         long endTimestamp= 0;
@@ -172,7 +226,7 @@ public class Simulator {
                             simPacket.setSrcPort(tcpPacket.getHeader().getSrcPort().valueAsString());
                             simPacket.setDstPort(tcpPacket.getHeader().getDstPort().valueAsString());
                             simPacket.setTcpFlag(tcpPacket.getHeader().getSyn(),tcpPacket.getHeader().getAck()
-                            ,tcpPacket.getHeader().getRst());
+                                    ,tcpPacket.getHeader().getRst());
 
                         } else if (protocol.equals(IpNumber.UDP.valueAsString()) ) {
                             UdpPacket udpPacket;
@@ -255,6 +309,7 @@ public class Simulator {
         }
         System.out.println("Average Packet Processing Time " + (sumPacketProcessingTime *1.0)/totalPacketCount);
         System.out.println("Timetaken: " + (endTimestamp-startTimestamp) + ", Total Packets: " + totalPacketCount);
+        return totalPacketCount;
     }
 
 }

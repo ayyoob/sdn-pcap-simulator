@@ -21,6 +21,7 @@ public class OFController {
     public static OFController getInstance() {
         return ofController;
     }
+    private List<SimPacket> packetLogs = new ArrayList<>();
 
     private OFController() {
 
@@ -80,6 +81,12 @@ public class OFController {
 
     }
 
+    public void  removeSwitch() {
+        ofSwitchMap.clear();
+        packetTransmittionMap.clear();
+    }
+
+
     public void removeApps() {
         registeredApps.clear();
     }
@@ -98,7 +105,17 @@ public class OFController {
         System.out.println(stats);
     }
 
+    public String getStats() {
+        String stats = "";
+        for (String dpId : packetTransmittionMap.keySet()) {
+            stats = "MacAddress:" + ofSwitchMap.get(dpId.toLowerCase()).getMacAddress()
+                    + ", TransmittedPacketCountThroughController:" + getNumperOfPackets(dpId);
+        }
+        return stats;
+    }
+
     public void complete() {
+        writeLogs();
         for (ControllerApp controllerApp: registeredApps) {
             controllerApp.complete();
         }
@@ -112,6 +129,14 @@ public class OFController {
         if (!packetLoggerEnabled) {
             return;
         }
+        packetLogs.add(packet);
+        if (packetLogs.size() > 20000) {
+            writeLogs();
+        }
+
+    }
+
+    private void writeLogs() {
         String currentPath = Paths.get(".").toAbsolutePath().normalize().toString();
 
         File workingDirectory = new File(currentPath + File.separator + "result");
@@ -123,7 +148,10 @@ public class OFController {
         FileWriter writer = null;
         try {
             writer = new FileWriter(file, true);
-            writer.write(packet.getPacketInfo() + "\n");
+            for (SimPacket packet : packetLogs) {
+                writer.write(packet.getPacketInfo() + "\n");
+            }
+            packetLogs.clear();
             writer.flush();
             writer.close();
         } catch (IOException e) {

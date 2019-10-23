@@ -38,8 +38,7 @@
 
         "MudAttackDetector": {
             "enabled": true,
-            "device" : "e0:a7:00:02:44:1b",
-            "deviceMac" : "ec:1a:59:83:28:11",
+            "device" : "00:17:88:2b:9a:25",
             "gatewayIp" : "192.168.1.1",
             "dpId":"14:cc:20:51:33:ea",
             "mud":"/Users/ayyoobhamza/Desktop/unsw/6-machineoptimize/profiles/HueBulbMud.json",
@@ -52,9 +51,8 @@
         "ipAddress": "192.168.1.1"
     },
 
-    "logPacket":true,
-    "pcapLocation": "/Users/ayyoobhamza/Desktop/test/old/a0a70002441b.pcap",
-
+    "logPacket": true,
+    "pcapLocation": "/Users/ayyoobhamza/Desktop/unsw/6-machineoptimize/pcap/0017882b9a25.pcap",
     "inspectFileWrite": false,
     "inspectFileName": "out.pcap"
 }

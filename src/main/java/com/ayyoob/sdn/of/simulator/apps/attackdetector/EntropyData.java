@@ -1,5 +1,7 @@
 package com.ayyoob.sdn.of.simulator.apps.attackdetector;
 
+import com.ayyoob.sdn.of.simulator.OFFlow;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -38,6 +40,9 @@ public class EntropyData {
 	}
 
 	public void addSrcIp(String value) {
+		if (value == null) {
+			return;
+		}
 		if (!srcIp.containsKey(value)) {
 			srcIp.put(value, 0);
 		}
@@ -46,6 +51,9 @@ public class EntropyData {
 	}
 
 	public void addDstIp(String value) {
+		if (value == null) {
+			return;
+		}
 		if (!dstIp.containsKey(value)) {
 			dstIp.put(value, 0);
 		}
@@ -54,6 +62,9 @@ public class EntropyData {
 	}
 
 	public void addSrcPort(String value) {
+		if (value == null) {
+			return;
+		}
 		if (!srcPort.containsKey(value)) {
 			srcPort.put(value, 0);
 		}
@@ -62,6 +73,9 @@ public class EntropyData {
 	}
 
 	public void addDstPort(String value) {
+		if (value == null) {
+			return;
+		}
 		if (!dstPort.containsKey(value)) {
 			dstPort.put(value, 0);
 		}
@@ -70,6 +84,9 @@ public class EntropyData {
 	}
 
 	public void addIcmpCode(String value) {
+		if (value == null) {
+			return;
+		}
 		if (!icmpCode.containsKey(value)) {
 			icmpCode.put(value, 0);
 		}
@@ -78,6 +95,9 @@ public class EntropyData {
 	}
 
 	public void addIcmpType(String value) {
+		if (value == null) {
+			return;
+		}
 		if (!icmpType.containsKey(value)) {
 			icmpType.put(value, 0);
 		}
@@ -87,26 +107,35 @@ public class EntropyData {
 
 
 	public String calculateShannonEntropy() {
-		String entropy =
-		(srcIpLength > 0 ? "" + getEntropy(srcIp, srcIpLength) : "-1") +
-		(dstIpLength > 0 ? "" + getEntropy(dstIp, dstIpLength) : "-1") +
-				(srcPortLength > 0 ? "" + getEntropy(srcPort, srcPortLength) : "-1") +
-				(dstPortLength > 0 ? "" + getEntropy(dstPort, dstPortLength) : "-1") +
-				(icmpCodeLength > 0 ? "" + getEntropy(icmpCode, icmpCodeLength) : "-1") +
-				(icmpTypeLength > 0 ? "" + getEntropy(icmpType, icmpTypeLength) : "-1");
+		String entropy = "," +
+				getEntropy(srcIp, srcIpLength) + "," +
+				getEntropy(dstIp, dstIpLength) + "," +
+				getEntropy(srcPort, srcPortLength) + "," +
+				getEntropy(dstPort, dstPortLength)  + "," +
+				getEntropy(icmpCode, icmpCodeLength) + "," +
+				getEntropy(icmpType, icmpTypeLength);
 
 		return  entropy;
 	}
 
+	//https://www.xycoon.com/normalized_entropy.htm
 	private double getEntropy(Map<String, Integer> map, int length) {
 
+//		if ((map.keySet().size()) <= 1) {
+//			return 0;
+//		}
+		if ((map.keySet().size()) == 0) {
+			return -1;
+		}
 		// calculate the entropy
 		Double result = 0.0;
 		for (String sequence : map.keySet()) {
 			Double frequency = (double) map.get(sequence) / length;
 			result -= frequency * (Math.log(frequency) / Math.log(2));
+//			result -= frequency * (Math.log(frequency));
 		}
 
+//		return result/(Math.log(map.keySet().size()));
 		return result;
 	}
 }
